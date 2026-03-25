@@ -1,0 +1,13 @@
+[project]
+name = "apexml-lite"
+version = "0.1.0"
+description = "F1 analytics platform powered by OpenF1, Snowflake Cortex AI, dbt, and Streamlit"
+requires-python = ">=3.13"
+
+[tool.uv.workspace]
+members = ["ingestion"]
+
+[dependency-groups]
+dev = [
+    "anthropic>=0.40.0",
+]
