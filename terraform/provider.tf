@@ -22,6 +22,5 @@ provider "snowflake" {
   organization_name = var.snowflake_organization
   user              = var.snowflake_user
   password          = var.snowflake_password
-  role              = "SYSADMIN"
-  warehouse         = var.snowflake_warehouse
+  role              = "ACCOUNTADMIN"
 }
