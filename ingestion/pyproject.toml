@@ -1,11 +1,11 @@
 [project]
 name = "ingestion"
 version = "0.1.0"
-description = "OpenF1 API ingestion into Snowflake RAW schema via Snowflake SQL API"
+description = "OpenF1 API ingestion into Snowflake RAW schema"
 requires-python = ">=3.13"
 dependencies = [
     "httpx>=0.27.0",
-    "cryptography>=42.0.0",
+    "snowflake-connector-python>=3.12.0",
 ]
 
 [tool.uv]

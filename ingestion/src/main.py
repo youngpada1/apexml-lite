@@ -3,8 +3,6 @@
 import argparse
 import asyncio
 
-import httpx
-
 from ingestion.src.client import fetch_all_race_sessions, fetch_session_data
 from ingestion.src.loader import get_loaded_session_keys, load_all
 
@@ -20,7 +18,7 @@ def parse_args():
     group.add_argument(
         "--all",
         action="store_true",
-        help="Load all available race sessions (skips already loaded ones)",
+        help="Load all available race sessions",
     )
     group.add_argument(
         "--new",
@@ -46,9 +44,7 @@ async def run_all(skip_existing: bool = False) -> None:
     print(f"Found {len(all_keys)} race sessions")
 
     if skip_existing:
-        transport = httpx.HTTPTransport(retries=3)
-        with httpx.Client(timeout=30.0, transport=transport) as client:
-            loaded_keys = get_loaded_session_keys(client)
+        loaded_keys = get_loaded_session_keys()
         new_keys = [k for k in all_keys if k not in loaded_keys]
         print(f"Skipping {len(loaded_keys)} already loaded — loading {len(new_keys)} new sessions")
         keys_to_load = new_keys

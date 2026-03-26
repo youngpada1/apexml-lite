@@ -1,97 +1,83 @@
-"""Write raw OpenF1 data to Snowflake RAW schema via Snowflake SQL API."""
+"""Write raw OpenF1 data to Snowflake RAW schema via snowflake-connector-python."""
 
 import json
-import uuid
+from pathlib import Path
 
-import httpx
+import snowflake.connector
+from cryptography.hazmat.primitives import serialization
 
 from ingestion.src import config
-from ingestion.src.auth import generate_jwt
 
 
-def _headers() -> dict:
-    return {
-        "Authorization": f"Bearer {generate_jwt()}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
-    }
+def _get_connection():
+    with open(Path(config.SNOWFLAKE_PRIVATE_KEY_PATH), "rb") as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None)
 
-
-def _execute_sql(client: httpx.Client, statement: str, bindings: dict | None = None) -> dict:
-    body: dict = {
-        "statement": statement,
-        "warehouse": config.SNOWFLAKE_WAREHOUSE,
-        "database": config.SNOWFLAKE_DATABASE,
-        "schema": config.SNOWFLAKE_SCHEMA,
-        "role": config.SNOWFLAKE_ROLE,
-        "requestId": str(uuid.uuid4()),
-    }
-    if bindings:
-        body["bindings"] = bindings
-
-    response = client.post(
-        config.SNOWFLAKE_SQL_API_URL,
-        headers=_headers(),
-        json=body,
+    private_key_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
     )
-    response.raise_for_status()
-    return response.json()
 
-
-def ensure_table(client: httpx.Client, table: str) -> None:
-    """Create RAW table if it doesn't exist — stores each row as a VARIANT."""
-    _execute_sql(
-        client,
-        f"CREATE TABLE IF NOT EXISTS {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.{table.upper()} (raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())",
+    return snowflake.connector.connect(
+        account=config.SNOWFLAKE_ACCOUNT,
+        user=config.SNOWFLAKE_USER,
+        private_key=private_key_bytes,
+        database=config.SNOWFLAKE_DATABASE,
+        schema=config.SNOWFLAKE_SCHEMA,
+        warehouse=config.SNOWFLAKE_WAREHOUSE,
+        role=config.SNOWFLAKE_ROLE,
     )
 
 
-def load_rows(client: httpx.Client, table: str, rows: list[dict]) -> int:
-    """Insert rows as VARIANT into a RAW table. Returns number of rows inserted."""
+def get_loaded_session_keys() -> set[int]:
+    """Return set of session keys already loaded in Snowflake RAW.SESSIONS."""
+    try:
+        conn = _get_connection()
+        cur = conn.cursor()
+        cur.execute(f"SELECT DISTINCT raw_data:session_key::integer FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS")
+        return {int(row[0]) for row in cur.fetchall() if row[0] is not None}
+    except Exception:
+        return set()
+    finally:
+        conn.close()
+
+
+def ensure_table(cur, table: str) -> None:
+    """Create RAW table if it doesn't exist."""
+    cur.execute(
+        f"CREATE TABLE IF NOT EXISTS {table.upper()} "
+        f"(raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())"
+    )
+
+
+def load_rows(cur, table: str, rows: list[dict]) -> int:
+    """Insert rows as VARIANT. Returns number of rows inserted."""
     if not rows:
         return 0
 
-    table_upper = table.upper()
-    inserted = 0
-
-    # Insert in batches of 1000
     batch_size = 1000
+    inserted = 0
     for i in range(0, len(rows), batch_size):
-        batch = rows[i : i + batch_size]
-        values = ", ".join(
-            f"(PARSE_JSON('{json.dumps(row).replace(chr(39), chr(39)+chr(39))}'))"
-            for row in batch
-        )
-        _execute_sql(
-            client,
-            f"INSERT INTO {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.{table_upper} (raw_data) VALUES {values}",
-        )
+        batch = rows[i: i + batch_size]
+        values = ", ".join(f"(PARSE_JSON(%s))" for _ in batch)
+        params = [json.dumps(row) for row in batch]
+        cur.execute(f"INSERT INTO {table.upper()} (raw_data) VALUES {values}", params)
         inserted += len(batch)
 
     return inserted
 
 
-def get_loaded_session_keys(client: httpx.Client) -> set[int]:
-    """Return set of session keys already loaded in Snowflake RAW.SESSIONS."""
-    try:
-        result = _execute_sql(
-            client,
-            f"SELECT DISTINCT raw_data:session_key::integer AS session_key "
-            f"FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS",
-        )
-        rows = result.get("data", [])
-        return {int(row[0]) for row in rows if row[0] is not None}
-    except Exception:
-        return set()
-
-
 def load_all(data: dict[str, list[dict]]) -> None:
     """Create tables and load all endpoint data into Snowflake RAW schema."""
-    transport = httpx.HTTPTransport(retries=3)
-    with httpx.Client(timeout=60.0, transport=transport) as client:
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
         for endpoint, rows in data.items():
-            print(f"Loading {endpoint}...")
-            ensure_table(client, endpoint)
-            inserted = load_rows(client, endpoint, rows)
+            print(f"  Loading {endpoint}...")
+            ensure_table(cur, endpoint)
+            inserted = load_rows(cur, endpoint, rows)
             print(f"  Inserted {inserted} rows into RAW.{endpoint.upper()}")
+        conn.commit()
+    finally:
+        conn.close()
