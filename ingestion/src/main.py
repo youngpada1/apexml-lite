@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import time
 
 from ingestion.src.client import fetch_all_race_sessions, fetch_session_data
 from ingestion.src.loader import get_loaded_session_keys, load_all
@@ -51,8 +52,10 @@ async def run_all(skip_existing: bool = False) -> None:
     else:
         keys_to_load = all_keys
 
-    for session_key in keys_to_load:
+    for i, session_key in enumerate(keys_to_load):
         await run_session(session_key)
+        if i < len(keys_to_load) - 1:
+            time.sleep(2)
 
     print(f"\nDone. Loaded {len(keys_to_load)} sessions.")
 
