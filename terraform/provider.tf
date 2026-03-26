@@ -22,5 +22,6 @@ provider "snowflake" {
   organization_name = var.snowflake_organization
   user              = var.snowflake_user
   private_key       = var.snowflake_private_key
+  authenticator     = "SNOWFLAKE_JWT"
   role              = "ACCOUNTADMIN"
 }
