@@ -4,7 +4,7 @@
 snowflake_organization = "QJCHIDB"
 snowflake_account      = "BU78481"
 snowflake_user         = "FLAVS"
-snowflake_password     = "your-password-here"
+snowflake_private_key  = "your-private-key-contents-here"
 snowflake_warehouse    = "APEXML_WH"
 snowflake_database     = "APEXML_DB"
 environment            = "dev"

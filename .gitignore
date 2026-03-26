@@ -28,6 +28,11 @@ crash.log
 override.tf
 override.tf.json
 
+# Keys
+*.p8
+*.pub
+*.pem
+
 # dbt
 dbt/target/
 dbt/dbt_packages/

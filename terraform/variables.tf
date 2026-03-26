@@ -13,8 +13,8 @@ variable "snowflake_user" {
   type        = string
 }
 
-variable "snowflake_password" {
-  description = "Snowflake password for Terraform"
+variable "snowflake_private_key" {
+  description = "Snowflake private key for key pair authentication (PEM contents, no headers)"
   type        = string
   sensitive   = true
 }
