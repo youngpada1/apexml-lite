@@ -1,0 +1,21 @@
+with source as (
+    select raw_data, loaded_at
+    from {{ source('raw', 'RACE_CONTROL') }}
+),
+
+renamed as (
+    select
+        raw_data:session_key::integer       as session_key,
+        raw_data:driver_number::integer     as driver_number,
+        raw_data:category::string           as category,
+        raw_data:flag::string               as flag,
+        raw_data:lap_number::integer        as lap_number,
+        raw_data:message::string            as message,
+        raw_data:scope::string              as scope,
+        raw_data:sector::integer            as sector,
+        raw_data:date::timestamp_ntz        as recorded_at,
+        loaded_at
+    from source
+)
+
+select * from renamed

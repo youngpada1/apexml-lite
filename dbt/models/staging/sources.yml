@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: raw
+    database: APEXML_DB
+    schema: RAW
+    tables:
+      - name: LAPS
+      - name: DRIVERS
+      - name: STINTS
+      - name: PIT
+      - name: POSITION
+      - name: INTERVALS
+      - name: WEATHER
+      - name: SESSIONS
+      - name: MEETINGS
+      - name: SESSION_RESULT
+      - name: STARTING_GRID
+      - name: RACE_CONTROL
+      - name: CAR_DATA
+      - name: LOCATION
+      - name: OVERTAKES
+      - name: TEAM_RADIO
+      - name: CHAMPIONSHIP_DRIVERS
+      - name: CHAMPIONSHIP_TEAMS

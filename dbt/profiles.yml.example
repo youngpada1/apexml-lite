@@ -1,0 +1,13 @@
+apexml:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: QJCHIDB-BU78481
+      user: FLAVS
+      private_key_path: ../terraform/rsa_key.p8
+      role: APEXML_TRANSFORMER
+      database: APEXML_DB
+      warehouse: APEXML_WH
+      schema: RAW
+      threads: 4

@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: dim_drivers
+    description: "Driver dimension — one row per driver per session"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: full_name
+        tests: [not_null]
+      - name: team_name
+        tests: [not_null]
+
+  - name: dim_sessions
+    description: "Session dimension — one row per session with meeting context"
+    columns:
+      - name: session_key
+        tests: [not_null, unique]
+      - name: session_name
+        tests: [not_null]
+
+  - name: fct_laps
+    description: "Lap times with tyre and driver context"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: lap_number
+        tests: [not_null]
+      - name: lap_duration_s
+        tests: [not_null]
+
+  - name: fct_pit_stops
+    description: "Pit stop events with tyre change context"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: pit_duration_s
+        tests: [not_null]
+
+  - name: fct_race_positions
+    description: "Driver positions throughout the race with grid and result context"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: position
+        tests: [not_null]
+
+  - name: fct_stints
+    description: "Stint aggregates with tyre degradation metrics"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: stint_number
+        tests: [not_null]
+      - name: tyre_compound
+        tests: [not_null]
