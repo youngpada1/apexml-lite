@@ -9,7 +9,7 @@ terraform {
   }
 
   cloud {
-    organization = "apexml"
+    organization = "apexml-lite"
 
     workspaces {
       name = "apexml-lite"
