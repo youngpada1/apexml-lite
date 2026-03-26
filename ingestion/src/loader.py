@@ -52,20 +52,15 @@ def ensure_table(cur, table: str) -> None:
 
 
 def load_rows(cur, table: str, rows: list[dict]) -> int:
-    """Insert rows as VARIANT. Returns number of rows inserted."""
+    """Insert rows as VARIANT using executemany. Returns number of rows inserted."""
     if not rows:
         return 0
 
-    batch_size = 1000
-    inserted = 0
-    for i in range(0, len(rows), batch_size):
-        batch = rows[i: i + batch_size]
-        values = ", ".join(f"(PARSE_JSON(%s))" for _ in batch)
-        params = [json.dumps(row) for row in batch]
-        cur.execute(f"INSERT INTO {table.upper()} (raw_data) VALUES {values}", params)
-        inserted += len(batch)
-
-    return inserted
+    cur.executemany(
+        f"INSERT INTO {table.upper()} (raw_data) SELECT PARSE_JSON(%s)",
+        [[json.dumps(row)] for row in rows],
+    )
+    return len(rows)
 
 
 def load_all(data: dict[str, list[dict]]) -> None:
