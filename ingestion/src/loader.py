@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import snowflake.connector
+from snowflake.connector.pandas_tools import write_pandas
 from cryptography.hazmat.primitives import serialization
 
 from ingestion.src import config
@@ -35,7 +37,10 @@ def get_loaded_session_keys() -> set[int]:
     try:
         conn = _get_connection()
         cur = conn.cursor()
-        cur.execute(f"SELECT DISTINCT raw_data:session_key::integer FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS")
+        cur.execute(
+            f"SELECT DISTINCT raw_data:session_key::integer "
+            f"FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS"
+        )
         return {int(row[0]) for row in cur.fetchall() if row[0] is not None}
     except Exception:
         return set()
@@ -51,15 +56,21 @@ def ensure_table(cur, table: str) -> None:
     )
 
 
-def load_rows(cur, table: str, rows: list[dict]) -> int:
-    """Insert rows as VARIANT using executemany. Returns number of rows inserted."""
+def load_rows(conn, table: str, rows: list[dict]) -> int:
+    """Insert rows as VARIANT using write_pandas. Returns number of rows inserted."""
     if not rows:
         return 0
 
-    cur.executemany(
-        f"INSERT INTO {table.upper()} (raw_data) SELECT PARSE_JSON(%s)",
-        [[json.dumps(row)] for row in rows],
-    )
+    df = pd.DataFrame({"RAW_DATA": [json.dumps(row) for row in rows]})
+    cur = conn.cursor()
+    cur.execute(f"CREATE TABLE IF NOT EXISTS {table.upper()} (raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())")
+
+    # Use a temp staging approach: insert as string then cast to VARIANT
+    tmp_table = f"{table.upper()}_TMP"
+    cur.execute(f"CREATE TEMP TABLE IF NOT EXISTS {tmp_table} (raw_data STRING)")
+    write_pandas(conn, df, tmp_table, auto_create_table=False, overwrite=True)
+    cur.execute(f"INSERT INTO {table.upper()} (raw_data) SELECT PARSE_JSON(raw_data) FROM {tmp_table}")
+    cur.execute(f"DROP TABLE IF EXISTS {tmp_table}")
     return len(rows)
 
 
@@ -71,7 +82,7 @@ def load_all(data: dict[str, list[dict]]) -> None:
         for endpoint, rows in data.items():
             print(f"  Loading {endpoint}...")
             ensure_table(cur, endpoint)
-            inserted = load_rows(cur, endpoint, rows)
+            inserted = load_rows(conn, endpoint, rows)
             print(f"  Inserted {inserted} rows into RAW.{endpoint.upper()}")
         conn.commit()
     finally:
