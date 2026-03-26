@@ -28,6 +28,8 @@ ENDPOINTS = [
     "championship_teams",
 ]
 
+NON_SESSION_ENDPOINTS = {"meetings", "championship_drivers", "championship_teams"}
+
 
 async def fetch_endpoint(
     client: httpx.AsyncClient,
@@ -40,19 +42,27 @@ async def fetch_endpoint(
     return response.json()
 
 
+async def fetch_all_race_sessions() -> list[dict]:
+    """Fetch all available race sessions from OpenF1."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{config.OPENF1_BASE_URL}/sessions",
+            params={"session_type": "Race"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+
 async def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
     """Fetch all endpoints for a given session key concurrently."""
     params = {"session_key": session_key}
-
-    # These endpoints don't filter by session_key
-    non_session_endpoints = {"meetings", "championship_drivers", "championship_teams"}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         tasks = {
             endpoint: fetch_endpoint(
                 client,
                 endpoint,
-                params if endpoint not in non_session_endpoints else {},
+                params if endpoint not in NON_SESSION_ENDPOINTS else {},
             )
             for endpoint in ENDPOINTS
         }
@@ -65,6 +75,6 @@ async def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
             data[endpoint] = []
         else:
             data[endpoint] = result
-            print(f"Fetched {len(result)} rows from {endpoint}")
+            print(f"  {endpoint}: {len(result)} rows")
 
     return data

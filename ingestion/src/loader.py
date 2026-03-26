@@ -77,6 +77,20 @@ def load_rows(client: httpx.Client, table: str, rows: list[dict]) -> int:
     return inserted
 
 
+def get_loaded_session_keys(client: httpx.Client) -> set[int]:
+    """Return set of session keys already loaded in Snowflake RAW.SESSIONS."""
+    try:
+        result = _execute_sql(
+            client,
+            f"SELECT DISTINCT raw_data:session_key::integer AS session_key "
+            f"FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS",
+        )
+        rows = result.get("data", [])
+        return {int(row[0]) for row in rows if row[0] is not None}
+    except Exception:
+        return set()
+
+
 def load_all(data: dict[str, list[dict]]) -> None:
     """Create tables and load all endpoint data into Snowflake RAW schema."""
     with httpx.Client(timeout=60.0) as client:
