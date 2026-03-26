@@ -46,7 +46,8 @@ async def run_all(skip_existing: bool = False) -> None:
     print(f"Found {len(all_keys)} race sessions")
 
     if skip_existing:
-        with httpx.Client(timeout=30.0) as client:
+        transport = httpx.HTTPTransport(retries=3)
+        with httpx.Client(timeout=30.0, transport=transport) as client:
             loaded_keys = get_loaded_session_keys(client)
         new_keys = [k for k in all_keys if k not in loaded_keys]
         print(f"Skipping {len(loaded_keys)} already loaded — loading {len(new_keys)} new sessions")

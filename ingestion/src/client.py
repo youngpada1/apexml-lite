@@ -1,6 +1,5 @@
 """Async OpenF1 API client for all 18 endpoints."""
 
-import asyncio
 from typing import Any
 
 import httpx
@@ -44,7 +43,8 @@ async def fetch_endpoint(
 
 async def fetch_all_race_sessions() -> list[dict]:
     """Fetch all available race sessions from OpenF1."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    transport = httpx.AsyncHTTPTransport(retries=3)
+    async with httpx.AsyncClient(timeout=30.0, transport=transport) as client:
         response = await client.get(
             f"{config.OPENF1_BASE_URL}/sessions",
             params={"session_type": "Race"},
@@ -54,27 +54,23 @@ async def fetch_all_race_sessions() -> list[dict]:
 
 
 async def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
-    """Fetch all endpoints for a given session key concurrently."""
+    """Fetch all endpoints for a given session key sequentially with retries."""
     params = {"session_key": session_key}
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        tasks = {
-            endpoint: fetch_endpoint(
-                client,
-                endpoint,
-                params if endpoint not in NON_SESSION_ENDPOINTS else {},
-            )
-            for endpoint in ENDPOINTS
-        }
-        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-
     data = {}
-    for endpoint, result in zip(tasks.keys(), results):
-        if isinstance(result, Exception):
-            print(f"Warning: failed to fetch {endpoint}: {result}")
-            data[endpoint] = []
-        else:
-            data[endpoint] = result
-            print(f"  {endpoint}: {len(result)} rows")
+
+    transport = httpx.AsyncHTTPTransport(retries=3)
+    async with httpx.AsyncClient(timeout=30.0, transport=transport) as client:
+        for endpoint in ENDPOINTS:
+            try:
+                result = await fetch_endpoint(
+                    client,
+                    endpoint,
+                    params if endpoint not in NON_SESSION_ENDPOINTS else {},
+                )
+                data[endpoint] = result
+                print(f"  {endpoint}: {len(result)} rows")
+            except Exception as e:
+                print(f"  Warning: failed to fetch {endpoint}: {e}")
+                data[endpoint] = []
 
     return data

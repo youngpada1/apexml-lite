@@ -93,7 +93,8 @@ def get_loaded_session_keys(client: httpx.Client) -> set[int]:
 
 def load_all(data: dict[str, list[dict]]) -> None:
     """Create tables and load all endpoint data into Snowflake RAW schema."""
-    with httpx.Client(timeout=60.0) as client:
+    transport = httpx.HTTPTransport(retries=3)
+    with httpx.Client(timeout=60.0, transport=transport) as client:
         for endpoint, rows in data.items():
             print(f"Loading {endpoint}...")
             ensure_table(client, endpoint)
