@@ -1,0 +1,27 @@
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    snowflake = {
+      source  = "Snowflake-Labs/snowflake"
+      version = "~> 0.98"
+    }
+  }
+
+  cloud {
+    organization = "apexml"
+
+    workspaces {
+      name = "apexml-lite"
+    }
+  }
+}
+
+provider "snowflake" {
+  account_name      = var.snowflake_account
+  organization_name = var.snowflake_organization
+  user              = var.snowflake_user
+  password          = var.snowflake_password
+  role              = "SYSADMIN"
+  warehouse         = var.snowflake_warehouse
+}
