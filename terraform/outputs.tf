@@ -18,9 +18,9 @@ output "schema_staging" {
   value       = snowflake_schema.staging.name
 }
 
-output "schema_analytics" {
-  description = "ANALYTICS schema name"
-  value       = snowflake_schema.analytics.name
+output "schema_prod" {
+  description = "PROD schema name"
+  value       = snowflake_schema.prod.name
 }
 
 output "role_writer" {

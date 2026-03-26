@@ -14,7 +14,7 @@ resource "snowflake_warehouse" "apexml_wh" {
 # ─────────────────────────────────────────────
 resource "snowflake_database" "apexml_db" {
   name    = var.snowflake_database
-  comment = "ApexML-Lite F1 analytics database"
+  comment = "ApexML-Lite F1 prod database"
 }
 
 # ─────────────────────────────────────────────
@@ -32,8 +32,8 @@ resource "snowflake_schema" "staging" {
   comment  = "dbt staging — cleaned and typed models"
 }
 
-resource "snowflake_schema" "analytics" {
+resource "snowflake_schema" "prod" {
   database = snowflake_database.apexml_db.name
-  name     = "ANALYTICS"
+  name     = "PROD"
   comment  = "dbt marts — facts, dimensions, KPIs for Streamlit and Cortex"
 }
