@@ -43,12 +43,7 @@ def ensure_table(client: httpx.Client, table: str) -> None:
     """Create RAW table if it doesn't exist — stores each row as a VARIANT."""
     _execute_sql(
         client,
-        f"""
-        CREATE TABLE IF NOT EXISTS {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.{table.upper()} (
-            raw_data VARIANT,
-            loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
-        )
-        """,
+        f"CREATE TABLE IF NOT EXISTS {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.{table.upper()} (raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())",
     )
 
 
