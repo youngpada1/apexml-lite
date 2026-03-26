@@ -14,4 +14,10 @@ SNOWFLAKE_SQL_API_URL = (
     f"https://{SNOWFLAKE_ACCOUNT}.snowflakecomputing.com/api/v2/statements"
 )
 
+# Account locator format needed for SQL API (e.g. LP64516.eu-central-2)
+SNOWFLAKE_ACCOUNT_LOCATOR = os.environ.get("SNOWFLAKE_ACCOUNT_LOCATOR", SNOWFLAKE_ACCOUNT)
+SNOWFLAKE_SQL_API_URL = (
+    f"https://{SNOWFLAKE_ACCOUNT_LOCATOR}.snowflakecomputing.com/api/v2/statements"
+)
+
 OPENF1_BASE_URL = "https://api.openf1.org/v1"
