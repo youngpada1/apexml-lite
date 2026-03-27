@@ -55,7 +55,7 @@ async def run_all(skip_existing: bool = False) -> None:
     for i, session_key in enumerate(keys_to_load):
         await run_session(session_key)
         if i < len(keys_to_load) - 1:
-            time.sleep(2)
+            time.sleep(5)
 
     print(f"\nDone. Loaded {len(keys_to_load)} sessions.")
 

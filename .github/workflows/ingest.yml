@@ -34,8 +34,7 @@ jobs:
         run: pip install uv
 
       - name: Install dependencies
-        run: uv sync
-        working-directory: ingestion
+        run: uv sync --directory ingestion
 
       - name: Write private key
         run: |
