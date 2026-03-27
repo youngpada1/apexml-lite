@@ -1,7 +1,6 @@
 """Orchestrator — fetch session data from OpenF1 and load into Snowflake RAW."""
 
 import argparse
-import asyncio
 import time
 
 from ingestion.src.client import fetch_all_race_sessions, fetch_session_data
@@ -29,18 +28,18 @@ def parse_args():
     return parser.parse_args()
 
 
-async def run_session(session_key: int) -> None:
+def run_session(session_key: int) -> None:
     print(f"\n--- Session {session_key} ---")
-    data = await fetch_session_data(session_key)
+    data = fetch_session_data(session_key)
     total_rows = sum(len(rows) for rows in data.values())
     print(f"Fetched {total_rows} total rows")
     load_all(data)
     print(f"Session {session_key} loaded.")
 
 
-async def run_all(skip_existing: bool = False) -> None:
+def run_all(skip_existing: bool = False) -> None:
     print("Fetching all available race sessions from OpenF1...")
-    sessions = await fetch_all_race_sessions()
+    sessions = fetch_all_race_sessions()
     all_keys = [s["session_key"] for s in sessions if s.get("session_key")]
     print(f"Found {len(all_keys)} race sessions")
 
@@ -53,7 +52,7 @@ async def run_all(skip_existing: bool = False) -> None:
         keys_to_load = all_keys
 
     for i, session_key in enumerate(keys_to_load):
-        await run_session(session_key)
+        run_session(session_key)
         if i < len(keys_to_load) - 1:
             time.sleep(5)
 
@@ -64,8 +63,8 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.session_key:
-        asyncio.run(run_session(args.session_key))
+        run_session(args.session_key)
     elif args.all:
-        asyncio.run(run_all(skip_existing=False))
+        run_all(skip_existing=False)
     elif args.new:
-        asyncio.run(run_all(skip_existing=True))
+        run_all(skip_existing=True)

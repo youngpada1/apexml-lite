@@ -1,5 +1,6 @@
-"""Async OpenF1 API client for all 18 endpoints."""
+"""Sync OpenF1 API client for all 18 endpoints."""
 
+import time
 from typing import Any
 
 import httpx
@@ -30,22 +31,22 @@ ENDPOINTS = [
 NON_SESSION_ENDPOINTS = {"meetings", "championship_drivers", "championship_teams"}
 
 
-async def fetch_endpoint(
-    client: httpx.AsyncClient,
+def fetch_endpoint(
+    client: httpx.Client,
     endpoint: str,
     params: dict[str, Any],
 ) -> list[dict]:
     url = f"{config.OPENF1_BASE_URL}/{endpoint}"
-    response = await client.get(url, params=params)
+    response = client.get(url, params=params)
     response.raise_for_status()
     return response.json()
 
 
-async def fetch_all_race_sessions() -> list[dict]:
+def fetch_all_race_sessions() -> list[dict]:
     """Fetch all available race sessions from OpenF1."""
-    transport = httpx.AsyncHTTPTransport(retries=3)
-    async with httpx.AsyncClient(timeout=30.0, transport=transport) as client:
-        response = await client.get(
+    transport = httpx.HTTPTransport(retries=3)
+    with httpx.Client(timeout=30.0, transport=transport) as client:
+        response = client.get(
             f"{config.OPENF1_BASE_URL}/sessions",
             params={"session_type": "Race"},
         )
@@ -53,16 +54,16 @@ async def fetch_all_race_sessions() -> list[dict]:
         return response.json()
 
 
-async def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
+def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
     """Fetch all endpoints for a given session key sequentially with retries."""
     params = {"session_key": session_key}
     data = {}
 
-    transport = httpx.AsyncHTTPTransport(retries=3)
-    async with httpx.AsyncClient(timeout=30.0, transport=transport) as client:
+    transport = httpx.HTTPTransport(retries=3)
+    with httpx.Client(timeout=30.0, transport=transport) as client:
         for endpoint in ENDPOINTS:
             try:
-                result = await fetch_endpoint(
+                result = fetch_endpoint(
                     client,
                     endpoint,
                     params if endpoint not in NON_SESSION_ENDPOINTS else {},
@@ -72,5 +73,6 @@ async def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
             except Exception as e:
                 print(f"  Warning: failed to fetch {endpoint}: {e}")
                 data[endpoint] = []
+            time.sleep(1)
 
     return data
