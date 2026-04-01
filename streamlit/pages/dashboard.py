@@ -1,12 +1,15 @@
 import streamlit as st
-from snowflake.snowpark.context import get_active_session
 import pandas as pd
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.connection import get_session
 
 
 def render():
     st.header("Race Analytics Dashboard")
 
-    session = get_active_session()
+    session = get_session()
 
     # ── Filters ────────────────────────────────────────────────────────────────
     with st.sidebar:
