@@ -11,6 +11,8 @@ renamed as (
         raw_data:year::integer              as year,
         loaded_at
     from source
+    where raw_data:team_name is not null
+      and raw_data:year is not null
     qualify row_number() over (partition by raw_data:team_name::string, raw_data:year::integer order by loaded_at desc) = 1
 )
 

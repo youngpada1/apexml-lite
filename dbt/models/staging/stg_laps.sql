@@ -20,6 +20,7 @@ renamed as (
         loaded_at
     from source
     where raw_data:lap_duration is not null
+      and raw_data:lap_duration::float is not null
 )
 
 select * from renamed
