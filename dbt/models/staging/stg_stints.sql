@@ -16,7 +16,7 @@ renamed as (
     from source
     where raw_data:session_key is not null
       and raw_data:driver_number is not null
-      and raw_data:compound is not null
+      and raw_data:compound::string is not null
 )
 
 select * from renamed
