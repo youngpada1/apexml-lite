@@ -120,6 +120,15 @@ resource "snowflake_grant_privileges_to_account_role" "transformer_raw_tables" {
   }
 }
 
+resource "snowflake_grant_privileges_to_account_role" "transformer_database_create_schema" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["CREATE SCHEMA"]
+  on_account_object {
+    object_type = "DATABASE"
+    object_name = snowflake_database.apexml_db.name
+  }
+}
+
 resource "snowflake_grant_privileges_to_account_role" "transformer_staging_schema" {
   account_role_name = snowflake_account_role.transformer.name
   privileges        = ["USAGE", "CREATE TABLE", "CREATE VIEW"]
