@@ -33,8 +33,11 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Install dependencies
+      - name: Install ingestion dependencies
         run: uv sync --directory ingestion
+
+      - name: Install dbt dependencies
+        run: uv sync --directory dbt
 
       - name: Write private key
         run: |
@@ -52,4 +55,28 @@ jobs:
           SNOWFLAKE_ROLE: APEXML_WRITER
         run: |
           MODE=${{ github.event.inputs.mode || 'new' }}
-          uv run python -m ingestion.src.main --$MODE
+          uv run --directory ingestion python -m ingestion.src.main --$MODE
+
+      - name: Write dbt profiles
+        run: |
+          cat > dbt/profiles.yml << EOF
+          apexml:
+            target: dev
+            outputs:
+              dev:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                private_key_path: /tmp/rsa_key.p8
+                role: APEXML_TRANSFORMER
+                database: APEXML_DB
+                warehouse: APEXML_WH
+                schema: RAW
+                threads: 4
+          EOF
+
+      - name: Run dbt
+        run: |
+          cd dbt
+          uv run dbt run
+          uv run dbt test
