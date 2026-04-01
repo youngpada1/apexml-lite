@@ -13,6 +13,7 @@ renamed as (
         raw_data:year::integer              as year,
         loaded_at
     from source
+    qualify row_number() over (partition by raw_data:driver_number::integer, raw_data:year::integer order by loaded_at desc) = 1
 )
 
 select * from renamed

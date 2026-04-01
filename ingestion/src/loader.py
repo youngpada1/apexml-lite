@@ -9,6 +9,7 @@ from snowflake.connector.pandas_tools import write_pandas
 from cryptography.hazmat.primitives import serialization
 
 from ingestion.src import config
+from ingestion.src.client import NON_SESSION_ENDPOINTS
 
 
 def _get_connection():
@@ -82,6 +83,8 @@ def load_all(data: dict[str, list[dict]]) -> None:
         for endpoint, rows in data.items():
             print(f"  Loading {endpoint}...")
             ensure_table(cur, endpoint)
+            if endpoint in NON_SESSION_ENDPOINTS:
+                cur.execute(f"TRUNCATE TABLE {endpoint.upper()}")
             inserted = load_rows(conn, endpoint, rows)
             print(f"  Inserted {inserted} rows into RAW.{endpoint.upper()}")
         conn.commit()
