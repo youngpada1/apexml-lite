@@ -64,3 +64,91 @@ models:
         tests: [not_null]
       - name: tyre_compound
         tests: [not_null]
+
+  - name: fct_session_results
+    description: "Final race results with grid position and places gained"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: finish_position
+        tests: [not_null]
+
+  - name: fct_overtakes
+    description: "Overtake events with overtaking and overtaken driver context"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_overtaking
+        tests: [not_null]
+      - name: driver_overtaken
+        tests: [not_null]
+
+  - name: fct_intervals
+    description: "Gap to leader and interval to car ahead over time"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: recorded_at
+        tests: [not_null]
+
+  - name: fct_weather
+    description: "Weather conditions sampled throughout each session"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: recorded_at
+        tests: [not_null]
+
+  - name: fct_race_control
+    description: "Race control messages — flags, safety cars, penalties"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: recorded_at
+        tests: [not_null]
+      - name: message
+        tests: [not_null]
+
+  - name: fct_car_data
+    description: "High-frequency telemetry — speed, RPM, throttle, brake, DRS, gear"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: recorded_at
+        tests: [not_null]
+
+  - name: fct_location
+    description: "High-frequency GPS coordinates per driver"
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: recorded_at
+        tests: [not_null]
+
+  - name: dim_championship_drivers
+    description: "Driver championship standings by year"
+    columns:
+      - name: driver_number
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: championship_position
+        tests: [not_null]
+
+  - name: dim_championship_teams
+    description: "Constructor championship standings by year"
+    columns:
+      - name: team_name
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: championship_position
+        tests: [not_null]

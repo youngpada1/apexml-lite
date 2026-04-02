@@ -18,3 +18,4 @@ models:
     marts:
       +schema: PROD
       +materialized: table
+      +transient: false
