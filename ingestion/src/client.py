@@ -28,7 +28,10 @@ ENDPOINTS = [
     "championship_teams",
 ]
 
-NON_SESSION_ENDPOINTS = {"meetings", "championship_drivers", "championship_teams"}
+NON_SESSION_ENDPOINTS = {"meetings", "championship_drivers", "championship_teams", "starting_grid"}
+
+# Endpoints that must be fetched per driver — OpenF1 rejects session-level requests as too large
+PER_DRIVER_ENDPOINTS = {"car_data", "location"}
 
 
 def fetch_endpoint(
@@ -78,15 +81,43 @@ def fetch_session_data(
 
     transport = httpx.HTTPTransport(retries=3)
     with httpx.Client(timeout=30.0, transport=transport) as client:
+        # Get driver numbers for this session (needed for per-driver endpoints)
+        driver_numbers: list[int] = []
+        if any(e in PER_DRIVER_ENDPOINTS for e in targets):
+            try:
+                drivers = fetch_endpoint(client, "drivers", params)
+                driver_numbers = [d["driver_number"] for d in drivers if "driver_number" in d]
+            except Exception as e:
+                print(f"  WARNING: could not fetch driver list for session {session_key}: {e}")
+
         for endpoint in targets:
             try:
-                result = fetch_endpoint(
-                    client,
-                    endpoint,
-                    params if endpoint not in NON_SESSION_ENDPOINTS else {},
-                )
-                data[endpoint] = result
-                print(f"  {endpoint}: {len(result)} rows")
+                if endpoint in PER_DRIVER_ENDPOINTS and driver_numbers:
+                    # Fetch per driver and merge
+                    all_rows: list[dict] = []
+                    for driver_number in driver_numbers:
+                        driver_params = {**params, "driver_number": driver_number}
+                        try:
+                            rows = fetch_endpoint(client, endpoint, driver_params)
+                            all_rows.extend(rows)
+                            time.sleep(2)
+                        except httpx.HTTPStatusError as e:
+                            if e.response.status_code in (404, 422):
+                                pass  # no data for this driver, skip silently
+                            else:
+                                print(f"  ERROR fetching {endpoint} driver {driver_number} — will retry next run: {e}")
+                        except Exception as e:
+                            print(f"  ERROR fetching {endpoint} driver {driver_number} — will retry next run: {e}")
+                    data[endpoint] = all_rows
+                    print(f"  {endpoint}: {len(all_rows)} rows ({len(driver_numbers)} drivers)")
+                else:
+                    result = fetch_endpoint(
+                        client,
+                        endpoint,
+                        params if endpoint not in NON_SESSION_ENDPOINTS else {},
+                    )
+                    data[endpoint] = result
+                    print(f"  {endpoint}: {len(result)} rows")
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (404, 422):
                     print(f"  No data available in API for {endpoint} (HTTP {e.response.status_code})")

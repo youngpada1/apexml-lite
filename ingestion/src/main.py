@@ -37,7 +37,7 @@ def parse_args():
 def run_session(session_key: int, endpoints: list[str] | None = None) -> None:
     print(f"\n--- Session {session_key} ---")
     data = fetch_session_data(session_key, endpoints=endpoints)
-    total_rows = sum(len(rows) for rows in data.values())
+    total_rows = sum(len(rows) for rows in data.values() if rows is not None)
     print(f"Fetched {total_rows} total rows")
     load_all(data)
     print(f"Session {session_key} loaded.")
