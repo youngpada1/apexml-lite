@@ -1,5 +1,8 @@
 import streamlit as st
 import altair as alt
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.colors import get_driver_colors, altair_color_scale
 
 
 def render(session):
@@ -42,6 +45,8 @@ def render(session):
         return
 
     driver_filter = ", ".join(str(d) for d in selected_driver_numbers)
+    color_map = get_driver_colors(drivers_df[drivers_df["FULL_NAME"].isin(selected_drivers)])
+    color_scale = altair_color_scale(color_map)
 
     col1, col2, col3, col4 = st.columns(4)
     laps_count = session.sql(f"""
@@ -78,7 +83,7 @@ def render(session):
             chart = alt.Chart(lap_data).mark_line(point=True).encode(
                 x=alt.X("LAP_NUMBER:Q", title="Lap"),
                 y=alt.Y("LAP_DURATION_S:Q", title="Lap Time (s)", scale=alt.Scale(zero=False)),
-                color="DRIVER_NAME:N",
+                color=alt.Color("DRIVER_NAME:N", scale=color_scale),
                 tooltip=["DRIVER_NAME", "LAP_NUMBER", "LAP_DURATION_S", "TYRE_COMPOUND"],
             ).properties(height=350)
             st.altair_chart(chart, use_container_width=True)
@@ -102,7 +107,7 @@ def render(session):
             chart = alt.Chart(pos_data).mark_line().encode(
                 x=alt.X("TS:T", title="Time"),
                 y=alt.Y("POSITION:Q", title="Position", scale=alt.Scale(reverse=True)),
-                color="FULL_NAME:N",
+                color=alt.Color("FULL_NAME:N", scale=color_scale),
                 tooltip=["FULL_NAME", "POSITION", "TS"],
             ).properties(height=350)
             st.altair_chart(chart, use_container_width=True)
