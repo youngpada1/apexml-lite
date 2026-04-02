@@ -1,4 +1,8 @@
 import streamlit as st
+from utils.connection import get_session
+from tabs.dashboard import render as dashboard
+from tabs.chatbot import render as chatbot
+from tabs.forecast import render as forecast
 
 st.set_page_config(
     page_title="ApexML-Lite",
@@ -8,16 +12,15 @@ st.set_page_config(
 
 st.title("🏎 ApexML-Lite — F1 Analytics")
 
+session = get_session()
+
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "🤖 Chatbot", "📈 Forecast"])
 
 with tab1:
-    from pages.dashboard import render
-    render()
+    dashboard(session)
 
 with tab2:
-    from pages.chatbot import render
-    render()
+    chatbot(session)
 
 with tab3:
-    from pages.forecast import render
-    render()
+    forecast(session)

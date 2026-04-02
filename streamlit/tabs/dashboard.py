@@ -1,17 +1,10 @@
 import streamlit as st
-import pandas as pd
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.connection import get_session
+import altair as alt
 
 
-def render():
+def render(session):
     st.header("Race Analytics Dashboard")
 
-    session = get_session()
-
-    # ── Filters ────────────────────────────────────────────────────────────────
     with st.sidebar:
         st.subheader("Filters")
 
@@ -50,24 +43,19 @@ def render():
 
     driver_filter = ", ".join(str(d) for d in selected_driver_numbers)
 
-    # ── Metrics ────────────────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
-
     laps_count = session.sql(f"""
         SELECT COUNT(*) AS n FROM APEXML_DB.PROD.FCT_LAPS
         WHERE session_key = {selected_session_key}
     """).to_pandas()["N"].iloc[0]
-
     fastest_lap = session.sql(f"""
         SELECT MIN(lap_duration_s) AS fl FROM APEXML_DB.PROD.FCT_LAPS
         WHERE session_key = {selected_session_key}
     """).to_pandas()["FL"].iloc[0]
-
     pit_count = session.sql(f"""
         SELECT COUNT(*) AS n FROM APEXML_DB.PROD.FCT_PIT_STOPS
         WHERE session_key = {selected_session_key}
     """).to_pandas()["N"].iloc[0]
-
     col1.metric("Total Laps", laps_count)
     col2.metric("Fastest Lap", f"{fastest_lap:.3f}s" if fastest_lap else "N/A")
     col3.metric("Pit Stops", pit_count)
@@ -75,10 +63,8 @@ def render():
 
     st.divider()
 
-    # ── Charts ─────────────────────────────────────────────────────────────────
     chart1, chart2 = st.columns(2)
 
-    # Lap times per driver
     with chart1:
         st.subheader("Lap Times")
         lap_data = session.sql(f"""
@@ -88,9 +74,7 @@ def render():
               AND driver_number IN ({driver_filter})
             ORDER BY lap_number
         """).to_pandas()
-
         if not lap_data.empty:
-            import altair as alt
             chart = alt.Chart(lap_data).mark_line(point=True).encode(
                 x=alt.X("LAP_NUMBER:Q", title="Lap"),
                 y=alt.Y("LAP_DURATION_S:Q", title="Lap Time (s)", scale=alt.Scale(zero=False)),
@@ -101,26 +85,20 @@ def render():
         else:
             st.info("No lap data available.")
 
-    # Race positions
     with chart2:
         st.subheader("Race Positions")
         pos_data = session.sql(f"""
-            SELECT date AS ts, position, driver_number
+            SELECT recorded_at AS ts, position, driver_number
             FROM APEXML_DB.PROD.FCT_RACE_POSITIONS
             WHERE session_key = {selected_session_key}
               AND driver_number IN ({driver_filter})
             ORDER BY ts
         """).to_pandas()
-
         if not pos_data.empty:
-            # Join driver names
             pos_data = pos_data.merge(
                 drivers_df[drivers_df["DRIVER_NUMBER"].isin(selected_driver_numbers)],
-                left_on="DRIVER_NUMBER",
-                right_on="DRIVER_NUMBER",
-                how="left"
+                on="DRIVER_NUMBER", how="left"
             )
-            import altair as alt
             chart = alt.Chart(pos_data).mark_line().encode(
                 x=alt.X("TS:T", title="Time"),
                 y=alt.Y("POSITION:Q", title="Position", scale=alt.Scale(reverse=True)),
@@ -133,7 +111,6 @@ def render():
 
     chart3, chart4 = st.columns(2)
 
-    # Pit stops
     with chart3:
         st.subheader("Pit Stops")
         pit_data = session.sql(f"""
@@ -143,13 +120,11 @@ def render():
               AND driver_number IN ({driver_filter})
             ORDER BY lap_number
         """).to_pandas()
-
         if not pit_data.empty:
             st.dataframe(pit_data, use_container_width=True)
         else:
             st.info("No pit stop data.")
 
-    # Tyre stints
     with chart4:
         st.subheader("Tyre Stints")
         stint_data = session.sql(f"""
@@ -160,7 +135,6 @@ def render():
               AND driver_number IN ({driver_filter})
             ORDER BY driver_name, stint_number
         """).to_pandas()
-
         if not stint_data.empty:
             st.dataframe(stint_data, use_container_width=True)
         else:
