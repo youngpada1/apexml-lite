@@ -124,8 +124,13 @@ def load_rows(conn, table: str, rows: list[dict]) -> int:
     return len(rows)
 
 
-def load_all(data: dict[str, list[dict]]) -> None:
-    """Create tables and load all endpoint data into Snowflake RAW schema."""
+def load_all(data: dict[str, list[dict] | None]) -> None:
+    """Create tables and load all endpoint data into Snowflake RAW schema.
+
+    rows=None  → API confirmed no data (404/422), skip silently — do not retry
+    rows=[]    → fetch failed with a retryable error, skip — will retry next run
+    rows=[...] → load into Snowflake
+    """
     session_key = None
     if "sessions" in data and data["sessions"]:
         session_key = data["sessions"][0].get("session_key")
@@ -138,6 +143,12 @@ def load_all(data: dict[str, list[dict]]) -> None:
 
             if endpoint in NON_SESSION_ENDPOINTS:
                 cur.execute(f"TRUNCATE TABLE {endpoint.upper()}")
+            elif rows is None:
+                print(f"  Skipping {endpoint} — no data available in API")
+                continue
+            elif not rows:
+                print(f"  Skipping {endpoint} — fetch failed, will retry next run")
+                continue
             elif session_key and has_session_data(cur, endpoint, session_key):
                 print(f"  Skipping {endpoint} — already loaded for session {session_key}")
                 continue

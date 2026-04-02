@@ -60,15 +60,20 @@ def fetch_all_race_sessions() -> list[dict]:
 def fetch_session_data(
     session_key: int,
     endpoints: list[str] | None = None,
-) -> dict[str, list[dict]]:
+) -> dict[str, list[dict] | None]:
     """Fetch endpoints for a given session key sequentially with retries.
 
     Args:
         session_key: OpenF1 session key.
         endpoints: Subset of endpoints to fetch. Defaults to all ENDPOINTS.
+
+    Returns:
+        Dict of endpoint -> rows. Value is:
+          - list[dict]: rows fetched successfully (may be empty list)
+          - None: API confirmed no data (404/422) — do not retry
     """
     params = {"session_key": session_key}
-    data = {}
+    data: dict[str, list[dict] | None] = {}
     targets = endpoints if endpoints is not None else ENDPOINTS
 
     transport = httpx.HTTPTransport(retries=3)
@@ -82,8 +87,15 @@ def fetch_session_data(
                 )
                 data[endpoint] = result
                 print(f"  {endpoint}: {len(result)} rows")
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in (404, 422):
+                    print(f"  No data available in API for {endpoint} (HTTP {e.response.status_code})")
+                    data[endpoint] = None
+                else:
+                    print(f"  ERROR fetching {endpoint} — will retry next run: {e}")
+                    data[endpoint] = []
             except Exception as e:
-                print(f"  Warning: failed to fetch {endpoint}: {e}")
+                print(f"  ERROR fetching {endpoint} — will retry next run: {e}")
                 data[endpoint] = []
             time.sleep(1)
 
