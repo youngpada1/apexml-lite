@@ -8,8 +8,8 @@ import snowflake.connector
 from snowflake.connector.pandas_tools import write_pandas
 from cryptography.hazmat.primitives import serialization
 
-from ingestion.src import config
-from ingestion.src.client import NON_SESSION_ENDPOINTS
+import config
+from client import NON_SESSION_ENDPOINTS
 
 
 def _get_connection():

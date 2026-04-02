@@ -3,8 +3,8 @@
 import argparse
 import time
 
-from ingestion.src.client import ENDPOINTS, fetch_all_race_sessions, fetch_session_data
-from ingestion.src.loader import get_incomplete_session_keys, get_loaded_session_keys, load_all
+from client import ENDPOINTS, fetch_all_race_sessions, fetch_session_data
+from loader import get_incomplete_session_keys, get_loaded_session_keys, load_all
 
 
 def parse_args():

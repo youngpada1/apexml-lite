@@ -55,7 +55,7 @@ jobs:
           SNOWFLAKE_ROLE: APEXML_WRITER
         run: |
           MODE=${{ github.event.inputs.mode || 'new' }}
-          uv run --directory ingestion python -m ingestion.src.main --$MODE
+          cd ingestion/src && uv run --project .. python main.py --$MODE
 
       - name: Write dbt profiles
         run: |

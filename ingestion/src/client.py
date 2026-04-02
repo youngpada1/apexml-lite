@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from ingestion.src import config
+import config
 
 ENDPOINTS = [
     "car_data",
