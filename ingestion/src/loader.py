@@ -49,6 +49,47 @@ def get_loaded_session_keys() -> set[int]:
         conn.close()
 
 
+def get_incomplete_session_keys(endpoints: list[str]) -> set[int]:
+    """Return session keys that are missing data in any of the given endpoints.
+
+    A session is considered incomplete if it exists in SESSIONS but has 0 rows
+    in any of the specified endpoint tables.
+    """
+    try:
+        conn = _get_connection()
+        cur = conn.cursor()
+
+        # Get all known session keys
+        cur.execute(
+            f"SELECT DISTINCT raw_data:session_key::integer "
+            f"FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS"
+        )
+        all_keys = {int(row[0]) for row in cur.fetchall() if row[0] is not None}
+
+        incomplete = set()
+        for session_key in all_keys:
+            for endpoint in endpoints:
+                try:
+                    cur.execute(
+                        f"SELECT COUNT(*) FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.{endpoint.upper()} "
+                        f"WHERE raw_data:session_key::integer = {session_key}"
+                    )
+                    count = cur.fetchone()[0]
+                    if count == 0:
+                        incomplete.add(session_key)
+                        break  # no need to check other endpoints for this session
+                except Exception:
+                    # table doesn't exist yet — session is incomplete
+                    incomplete.add(session_key)
+                    break
+
+        return incomplete
+    except Exception:
+        return set()
+    finally:
+        conn.close()
+
+
 def ensure_table(cur, table: str) -> None:
     """Create RAW table if it doesn't exist."""
     cur.execute(

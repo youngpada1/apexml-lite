@@ -39,7 +39,10 @@ def fetch_endpoint(
     url = f"{config.OPENF1_BASE_URL}/{endpoint}"
     response = client.get(url, params=params)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    if not isinstance(data, list):
+        return []
+    return data
 
 
 def fetch_all_race_sessions() -> list[dict]:
@@ -54,14 +57,23 @@ def fetch_all_race_sessions() -> list[dict]:
         return response.json()
 
 
-def fetch_session_data(session_key: int) -> dict[str, list[dict]]:
-    """Fetch all endpoints for a given session key sequentially with retries."""
+def fetch_session_data(
+    session_key: int,
+    endpoints: list[str] | None = None,
+) -> dict[str, list[dict]]:
+    """Fetch endpoints for a given session key sequentially with retries.
+
+    Args:
+        session_key: OpenF1 session key.
+        endpoints: Subset of endpoints to fetch. Defaults to all ENDPOINTS.
+    """
     params = {"session_key": session_key}
     data = {}
+    targets = endpoints if endpoints is not None else ENDPOINTS
 
     transport = httpx.HTTPTransport(retries=3)
     with httpx.Client(timeout=30.0, transport=transport) as client:
-        for endpoint in ENDPOINTS:
+        for endpoint in targets:
             try:
                 result = fetch_endpoint(
                     client,
