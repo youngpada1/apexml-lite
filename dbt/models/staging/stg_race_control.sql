@@ -16,6 +16,10 @@ renamed as (
         raw_data:date::timestamp_ntz        as recorded_at,
         loaded_at
     from source
+    qualify row_number() over (
+        partition by raw_data:session_key::integer, raw_data:date::timestamp_ntz, raw_data:message::string
+        order by loaded_at desc
+    ) = 1
 )
 
 select * from renamed

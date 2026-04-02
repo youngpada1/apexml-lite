@@ -12,6 +12,10 @@ renamed as (
         raw_data:classified_position::string as classified_position,
         loaded_at
     from source
+    qualify row_number() over (
+        partition by raw_data:session_key::integer, raw_data:driver_number::integer
+        order by loaded_at desc
+    ) = 1
 )
 
 select * from renamed

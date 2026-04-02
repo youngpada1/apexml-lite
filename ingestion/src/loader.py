@@ -57,6 +57,15 @@ def ensure_table(cur, table: str) -> None:
     )
 
 
+def has_session_data(cur, table: str, session_key: int) -> bool:
+    """Return True if this session_key already has data in the table."""
+    cur.execute(
+        f"SELECT COUNT(*) FROM {table.upper()} "
+        f"WHERE raw_data:session_key::integer = {session_key}"
+    )
+    return cur.fetchone()[0] > 0
+
+
 def load_rows(conn, table: str, rows: list[dict]) -> int:
     """Insert rows as VARIANT using write_pandas. Returns number of rows inserted."""
     if not rows:
@@ -66,7 +75,6 @@ def load_rows(conn, table: str, rows: list[dict]) -> int:
     cur = conn.cursor()
     cur.execute(f"CREATE TABLE IF NOT EXISTS {table.upper()} (raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())")
 
-    # Use a temp staging approach: insert as string then cast to VARIANT
     tmp_table = f"{table.upper()}_TMP"
     cur.execute(f"CREATE TEMP TABLE IF NOT EXISTS {tmp_table} (raw_data STRING)")
     write_pandas(conn, df, tmp_table, auto_create_table=False, overwrite=True)
@@ -77,14 +85,23 @@ def load_rows(conn, table: str, rows: list[dict]) -> int:
 
 def load_all(data: dict[str, list[dict]]) -> None:
     """Create tables and load all endpoint data into Snowflake RAW schema."""
+    session_key = None
+    if "sessions" in data and data["sessions"]:
+        session_key = data["sessions"][0].get("session_key")
+
     conn = _get_connection()
     try:
         cur = conn.cursor()
         for endpoint, rows in data.items():
-            print(f"  Loading {endpoint}...")
             ensure_table(cur, endpoint)
+
             if endpoint in NON_SESSION_ENDPOINTS:
                 cur.execute(f"TRUNCATE TABLE {endpoint.upper()}")
+            elif session_key and has_session_data(cur, endpoint, session_key):
+                print(f"  Skipping {endpoint} — already loaded for session {session_key}")
+                continue
+
+            print(f"  Loading {endpoint}...")
             inserted = load_rows(conn, endpoint, rows)
             print(f"  Inserted {inserted} rows into RAW.{endpoint.upper()}")
         conn.commit()
