@@ -28,7 +28,10 @@ ENDPOINTS = [
     "championship_teams",
 ]
 
-NON_SESSION_ENDPOINTS = {"meetings", "championship_drivers", "championship_teams", "starting_grid"}
+NON_SESSION_ENDPOINTS = {"meetings", "championship_drivers", "championship_teams"}
+
+# Endpoints that must be fetched without session_key (API doesn't support it) and loaded once per run
+BULK_ENDPOINTS = {"starting_grid"}
 
 # Endpoints that must be fetched per driver — OpenF1 rejects session-level requests as too large
 PER_DRIVER_ENDPOINTS = {"car_data", "location"}
@@ -45,6 +48,23 @@ def fetch_endpoint(
     data = response.json()
     if not isinstance(data, list):
         return []
+    return data
+
+
+def fetch_bulk_data() -> dict[str, list[dict]]:
+    """Fetch all BULK_ENDPOINTS (no session filter) in one shot."""
+    transport = httpx.HTTPTransport(retries=3)
+    data = {}
+    with httpx.Client(timeout=30.0, transport=transport) as client:
+        for endpoint in BULK_ENDPOINTS:
+            try:
+                result = fetch_endpoint(client, endpoint, {})
+                data[endpoint] = result
+                print(f"  {endpoint}: {len(result)} rows")
+            except Exception as e:
+                print(f"  ERROR fetching bulk {endpoint}: {e}")
+                data[endpoint] = []
+            time.sleep(1)
     return data
 
 

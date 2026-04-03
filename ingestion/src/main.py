@@ -3,8 +3,8 @@
 import argparse
 import time
 
-from client import ENDPOINTS, fetch_all_race_sessions, fetch_session_data
-from loader import get_incomplete_session_keys, get_loaded_session_keys, load_all
+from client import BULK_ENDPOINTS, ENDPOINTS, fetch_all_race_sessions, fetch_bulk_data, fetch_session_data
+from loader import get_incomplete_session_keys, get_loaded_session_keys, load_all, load_bulk
 
 
 def parse_args():
@@ -44,22 +44,31 @@ def run_session(session_key: int, endpoints: list[str] | None = None) -> None:
 
 
 def run_all(skip_existing: bool = False, endpoints: list[str] | None = None) -> None:
-    print("Fetching all available race sessions from OpenF1...")
+    # Determine which endpoints to process
+    targets = endpoints if endpoints is not None else ENDPOINTS
+    session_targets = [e for e in targets if e not in BULK_ENDPOINTS]
+    bulk_targets = [e for e in targets if e in BULK_ENDPOINTS]
+
+    # Load bulk endpoints once before session loop
+    if bulk_targets:
+        print("\n--- Loading bulk endpoints ---")
+        bulk_data = fetch_bulk_data()
+        load_bulk(bulk_data)
+
+    if not session_targets:
+        print("\nDone. No session endpoints to process.")
+        return
+
+    print("\nFetching all available race sessions from OpenF1...")
     sessions = fetch_all_race_sessions()
     all_keys = [s["session_key"] for s in sessions if s.get("session_key")]
     print(f"Found {len(all_keys)} race sessions")
 
     if skip_existing:
-        # New sessions not yet in Snowflake at all
         loaded_keys = get_loaded_session_keys()
         new_keys = [k for k in all_keys if k not in loaded_keys]
-
-        # Existing sessions that are missing one or more endpoints
-        check_endpoints = endpoints if endpoints is not None else ENDPOINTS
-        incomplete_keys = get_incomplete_session_keys(check_endpoints)
-        # Only backfill existing sessions (not brand new ones — they'll be fully loaded anyway)
+        incomplete_keys = get_incomplete_session_keys(session_targets)
         backfill_keys = [k for k in incomplete_keys if k in loaded_keys]
-
         keys_to_load = new_keys + backfill_keys
         print(
             f"New sessions: {len(new_keys)} | "
@@ -70,7 +79,7 @@ def run_all(skip_existing: bool = False, endpoints: list[str] | None = None) -> 
         keys_to_load = all_keys
 
     for i, session_key in enumerate(keys_to_load):
-        run_session(session_key, endpoints=endpoints)
+        run_session(session_key, endpoints=session_targets if session_targets != ENDPOINTS else None)
         if i < len(keys_to_load) - 1:
             time.sleep(5)
 

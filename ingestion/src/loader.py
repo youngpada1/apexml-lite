@@ -9,7 +9,7 @@ from snowflake.connector.pandas_tools import write_pandas
 from cryptography.hazmat.primitives import serialization
 
 import config
-from client import NON_SESSION_ENDPOINTS
+from client import NON_SESSION_ENDPOINTS, BULK_ENDPOINTS
 
 
 def _get_connection():
@@ -122,6 +122,26 @@ def load_rows(conn, table: str, rows: list[dict]) -> int:
     cur.execute(f"INSERT INTO {table.upper()} (raw_data) SELECT PARSE_JSON(raw_data) FROM {tmp_table}")
     cur.execute(f"DROP TABLE IF EXISTS {tmp_table}")
     return len(rows)
+
+
+def load_bulk(data: dict[str, list[dict]]) -> None:
+    """Truncate and reload bulk endpoints (e.g. starting_grid) — called once per run."""
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
+        for endpoint, rows in data.items():
+            if endpoint not in BULK_ENDPOINTS:
+                continue
+            ensure_table(cur, endpoint)
+            cur.execute(f"TRUNCATE TABLE {endpoint.upper()}")
+            if not rows:
+                print(f"  {endpoint}: 0 rows — skipping")
+                continue
+            inserted = load_rows(conn, endpoint, rows)
+            print(f"  Inserted {inserted} rows into RAW.{endpoint.upper()}")
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def load_all(data: dict[str, list[dict] | None]) -> None:
