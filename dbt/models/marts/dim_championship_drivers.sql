@@ -3,10 +3,12 @@ with championship as (
 )
 
 select
+    session_key,
+    meeting_key,
     driver_number,
-    broadcast_name,
-    team_name,
-    points,
+    points_current,
+    points_start,
     championship_position,
+    championship_position_start,
     year
 from championship

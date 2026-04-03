@@ -132,21 +132,21 @@ models:
         tests: [not_null]
 
   - name: dim_championship_drivers
-    description: "Driver championship standings by year"
+    description: "Driver championship standings per session"
     columns:
       - name: driver_number
         tests: [not_null]
-      - name: year
+      - name: session_key
         tests: [not_null]
       - name: championship_position
         tests: [not_null]
 
   - name: dim_championship_teams
-    description: "Constructor championship standings by year"
+    description: "Constructor championship standings per session"
     columns:
       - name: team_name
         tests: [not_null]
-      - name: year
+      - name: session_key
         tests: [not_null]
       - name: championship_position
         tests: [not_null]

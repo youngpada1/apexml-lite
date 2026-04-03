@@ -8,19 +8,19 @@ models:
         tests: [not_null, unique]
 
   - name: stg_championship_drivers
-    description: "Championship driver standings — one row per driver per year"
+    description: "Championship driver standings — one row per driver per session"
     columns:
       - name: driver_number
         tests: [not_null]
-      - name: year
+      - name: session_key
         tests: [not_null]
 
   - name: stg_championship_teams
-    description: "Championship team standings — one row per team per year"
+    description: "Championship team standings — one row per team per session"
     columns:
       - name: team_name
         tests: [not_null]
-      - name: year
+      - name: session_key
         tests: [not_null]
 
   - name: stg_sessions
