@@ -23,6 +23,7 @@ renamed as (
     left join sessions sess
         on s.raw_data:session_key::integer = sess.session_key
     where s.raw_data:team_name is not null
+      and s.raw_data:team_name::string != ''
       and s.raw_data:session_key is not null
     qualify row_number() over (
         partition by s.raw_data:session_key::integer, s.raw_data:team_name::string
