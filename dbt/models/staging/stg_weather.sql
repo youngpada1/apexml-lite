@@ -12,7 +12,7 @@ renamed as (
         raw_data:pressure::float            as pressure_mbar,
         raw_data:wind_speed::float          as wind_speed_ms,
         raw_data:wind_direction::integer    as wind_direction_deg,
-        raw_data:rainfall::boolean          as is_raining,
+        raw_data:rainfall::integer = 1      as is_raining,
         raw_data:date::timestamp_ntz        as recorded_at,
         loaded_at
     from source

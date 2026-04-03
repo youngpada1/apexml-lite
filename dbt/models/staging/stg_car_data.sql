@@ -9,7 +9,7 @@ renamed as (
         raw_data:driver_number::integer     as driver_number,
         raw_data:speed::integer             as speed_kmh,
         raw_data:throttle::integer          as throttle_pct,
-        raw_data:brake::boolean             as is_braking,
+        raw_data:brake::integer = 1         as is_braking,
         raw_data:drs::integer               as drs_status,
         raw_data:n_gear::integer            as gear,
         raw_data:rpm::integer               as rpm,
