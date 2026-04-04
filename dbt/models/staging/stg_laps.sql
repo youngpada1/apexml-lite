@@ -12,9 +12,9 @@ renamed as (
         raw_data:duration_sector_1::float   as sector_1_s,
         raw_data:duration_sector_2::float   as sector_2_s,
         raw_data:duration_sector_3::float   as sector_3_s,
-        raw_data:i1_speed::float            as speed_trap_i1,
-        raw_data:i2_speed::float            as speed_trap_i2,
-        raw_data:st_speed::float            as speed_trap_fl,
+        raw_data:i1_speed::float            as speed_trap_i1_kmh,
+        raw_data:i2_speed::float            as speed_trap_i2_kmh,
+        raw_data:st_speed::float            as speed_trap_fl_kmh,
         raw_data:is_pit_out_lap::boolean    as is_pit_out_lap,
         raw_data:date_start::timestamp_ntz  as lap_start_at,
         loaded_at

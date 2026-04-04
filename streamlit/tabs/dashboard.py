@@ -37,7 +37,7 @@ def render(session):
         """).to_pandas()
 
         session_labels = sessions_df["LABEL"].tolist()
-        selected_labels = st.multiselect("Sessions", session_labels, default=session_labels[:1])
+        selected_labels = st.multiselect("Sessions", session_labels, default=session_labels)
 
         if not selected_labels:
             st.warning("Select at least one session.")
@@ -56,7 +56,7 @@ def render(session):
         """).to_pandas()
 
         driver_options = drivers_df["FULL_NAME"].drop_duplicates().tolist()
-        selected_drivers = st.multiselect("Drivers", driver_options, default=driver_options[:5])
+        selected_drivers = st.multiselect("Drivers", driver_options, default=driver_options)
 
         if not selected_drivers:
             st.warning("Select at least one driver.")
@@ -96,17 +96,14 @@ def render(session):
     # ── Starting Grid ──────────────────────────────────────────────────────────
     st.subheader("Starting Grid")
     grid_raw = session.sql(f"""
-        SELECT sg.driver_number, sg.driver_name, sg.team_name, sg.grid_position,
+        SELECT d.full_name AS driver_name, d.team_name, r.grid_position,
                s.meeting_name || ' — ' || s.session_name AS race_label
-        FROM APEXML_DB.PROD.FCT_RACE_POSITIONS rp
-        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON rp.session_key = s.session_key
-        JOIN APEXML_DB.RAW.STARTING_GRID sg
-            ON sg.meeting_key = s.meeting_key
-            AND sg.driver_number = rp.driver_number
-        WHERE rp.session_key IN ({session_filter})
-          AND rp.driver_number IN ({driver_filter})
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY s.session_key, sg.driver_number ORDER BY sg.grid_position) = 1
-        ORDER BY race_label, sg.grid_position
+        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+        JOIN APEXML_DB.PROD.DIM_DRIVERS d ON r.driver_number = d.driver_number AND r.session_key = d.session_key
+        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+        WHERE r.session_key IN ({session_filter})
+          AND r.driver_number IN ({driver_filter})
+        ORDER BY race_label, r.grid_position
     """).to_pandas()
     if not grid_raw.empty:
         st.dataframe(grid_raw, use_container_width=True)
@@ -258,38 +255,35 @@ def render(session):
 
     st.divider()
 
-    # ── Car Telemetry ─────────────────────────────────────────────────────────
-    st.subheader("Car Telemetry")
-    st.caption("Sampled — showing average per lap per driver to keep it readable.")
+    # ── Lap Telemetry ─────────────────────────────────────────────────────────
+    st.subheader("Lap Telemetry")
     telemetry_data = session.sql(f"""
-        SELECT
-            d.full_name AS driver_name,
-            l.lap_number,
-            AVG(c.speed) AS avg_speed,
-            AVG(c.throttle) AS avg_throttle,
-            AVG(c.brake) AS brake_pct,
-            AVG(c.rpm) AS avg_rpm,
-            s.meeting_name || ' — ' || s.session_name AS race_label
-        FROM APEXML_DB.PROD.FCT_CAR_DATA c
-        JOIN APEXML_DB.PROD.FCT_LAPS l
-            ON c.session_key = l.session_key
-            AND c.driver_number = l.driver_number
-            AND c.recorded_at BETWEEN l.lap_start_at AND l.lap_end_at
-        JOIN APEXML_DB.PROD.DIM_DRIVERS d ON c.driver_number = d.driver_number AND c.session_key = d.session_key
-        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON c.session_key = s.session_key
-        WHERE c.session_key IN ({session_filter})
-          AND c.driver_number IN ({driver_filter})
-        GROUP BY d.full_name, l.lap_number, race_label
+        SELECT l.driver_name, l.lap_number,
+               l.sector_1_s, l.sector_2_s, l.sector_3_s,
+               l.speed_trap_i1_kmh, l.speed_trap_i2_kmh, l.speed_trap_fl_kmh,
+               l.tyre_compound,
+               s.meeting_name || ' — ' || s.session_name AS race_label
+        FROM APEXML_DB.PROD.FCT_LAPS l
+        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON l.session_key = s.session_key
+        WHERE l.session_key IN ({session_filter})
+          AND l.driver_number IN ({driver_filter})
         ORDER BY race_label, l.lap_number
     """).to_pandas()
     if not telemetry_data.empty:
-        for metric, title in [("AVG_SPEED", "Avg Speed (km/h)"), ("AVG_THROTTLE", "Avg Throttle (%)"), ("BRAKE_PCT", "Brake Usage (%)"), ("AVG_RPM", "Avg RPM")]:
+        for metric, title in [
+            ("SPEED_TRAP_I1_KMH", "Speed Trap I1 (km/h)"),
+            ("SPEED_TRAP_I2_KMH", "Speed Trap I2 (km/h)"),
+            ("SPEED_TRAP_FL_KMH", "Speed Trap Finish Line (km/h)"),
+            ("SECTOR_1_S", "Sector 1 (s)"),
+            ("SECTOR_2_S", "Sector 2 (s)"),
+            ("SECTOR_3_S", "Sector 3 (s)"),
+        ]:
             chart = alt.Chart(telemetry_data).mark_line(opacity=0.8).encode(
                 x=alt.X("LAP_NUMBER:Q", title="Lap"),
                 y=alt.Y(f"{metric}:Q", title=title, scale=alt.Scale(zero=False)),
                 color=alt.Color("DRIVER_NAME:N", scale=color_scale),
                 strokeDash=alt.StrokeDash("RACE_LABEL:N"),
-                tooltip=["DRIVER_NAME", "RACE_LABEL", "LAP_NUMBER", f"{metric}"],
+                tooltip=["DRIVER_NAME", "RACE_LABEL", "LAP_NUMBER", f"{metric}", "TYRE_COMPOUND"],
             ).properties(height=250, title=title)
             st.altair_chart(chart, use_container_width=True)
     else:
@@ -300,7 +294,7 @@ def render(session):
     # ── Intervals ─────────────────────────────────────────────────────────────
     st.subheader("Gap to Leader")
     interval_data = session.sql(f"""
-        SELECT i.gap_to_leader, i.interval_to_car_ahead, i.recorded_at,
+        SELECT i.gap_to_leader_s, i.interval_to_ahead_s, i.recorded_at,
                d.full_name AS driver_name,
                s.meeting_name || ' — ' || s.session_name AS race_label
         FROM APEXML_DB.PROD.FCT_INTERVALS i
@@ -313,10 +307,10 @@ def render(session):
     if not interval_data.empty:
         chart = alt.Chart(interval_data).mark_line(opacity=0.8).encode(
             x=alt.X("RECORDED_AT:T", title="Time"),
-            y=alt.Y("GAP_TO_LEADER:Q", title="Gap to Leader (s)", scale=alt.Scale(zero=False)),
+            y=alt.Y("GAP_TO_LEADER_S:Q", title="Gap to Leader (s)", scale=alt.Scale(zero=False)),
             color=alt.Color("DRIVER_NAME:N", scale=color_scale),
             strokeDash=alt.StrokeDash("RACE_LABEL:N"),
-            tooltip=["DRIVER_NAME", "RACE_LABEL", "GAP_TO_LEADER", "INTERVAL_TO_CAR_AHEAD", "RECORDED_AT"],
+            tooltip=["DRIVER_NAME", "RACE_LABEL", "GAP_TO_LEADER_S", "INTERVAL_TO_AHEAD_S", "RECORDED_AT"],
         ).properties(height=350)
         st.altair_chart(chart, use_container_width=True)
     else:
