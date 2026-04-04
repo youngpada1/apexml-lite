@@ -2,6 +2,7 @@
 
 ## 🔒 Core Rules (Non-Negotiable)
 
+- NEVER run terminal commands — always provide the command as text for the user to run.
 - NEVER commit changes without explicit user permission.
 - NEVER apply code changes automatically without user approval.
 - ALWAYS propose a plan before making any changes.
