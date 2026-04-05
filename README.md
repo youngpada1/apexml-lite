@@ -36,9 +36,24 @@ OpenF1 API (18 endpoints)
 ┌─────────────────────────────────────────────────────────┐
 │                  Snowflake (fully native)                │
 ├─────────────────────────────────────────────────────────┤
-│  RAW schema       │  Landing zone — raw JSON rows        │
-│  STAGING schema   │  dbt: clean types, rename columns    │
-│  PROD schema      │  dbt: facts, dims, KPIs              │
+│  RAW schema    18 tables — one per OpenF1 endpoint       │
+│    CAR_DATA · DRIVERS · INTERVALS · LAPS · LOCATION      │
+│    MEETINGS · OVERTAKES · PIT · POSITION · RACE_CONTROL  │
+│    SESSION_RESULT · SESSIONS · STARTING_GRID · STINTS    │
+│    TEAM_RADIO · WEATHER · CHAMPIONSHIP_DRIVERS/TEAMS     │
+├─────────────────────────────────────────────────────────┤
+│  STAGING schema   18 views — clean types, renamed cols   │
+│    stg_sessions · stg_laps · stg_stints · stg_pit        │
+│    stg_drivers · stg_meetings · stg_position · ...       │
+├─────────────────────────────────────────────────────────┤
+│  PROD schema   dims + facts                              │
+│    dims:  DIM_SESSIONS · DIM_MEETINGS · DIM_DRIVERS      │
+│           DIM_CHAMPIONSHIP_DRIVERS · DIM_CHAMPIONSHIP_TEAMS │
+│    facts: FCT_LAPS · FCT_STINTS · FCT_PIT_STOPS          │
+│           FCT_SESSION_RESULTS · FCT_RACE_POSITIONS        │
+│           FCT_INTERVALS · FCT_CAR_DATA · FCT_LOCATION     │
+│           FCT_WEATHER · FCT_RACE_CONTROL · FCT_OVERTAKES  │
+│           FCT_STARTING_GRID · FCT_TEAM_RADIO              │
 ├─────────────────────────────────────────────────────────┤
 │  Cortex FORECAST()   │  Lap degradation & race outcomes  │
 │  Cortex COMPLETE()   │  F1 chatbot (natural language)    │
@@ -85,16 +100,51 @@ apexml-lite/
 ├── ingestion/              # Python ELT — OpenF1 API → Snowflake RAW
 │   ├── src/
 │   │   ├── client.py       # Async OpenF1 API client (all 18 endpoints)
-│   │   ├── loader.py       # Snowflake connector — writes to RAW schema
+│   │   ├── loader.py       # Snowflake connector — MERGE into RAW schema
 │   │   ├── main.py         # Orchestrator: fetch session → load all endpoints
 │   │   └── config.py       # Env-based config
 │   ├── pyproject.toml
 │   └── .env.example
 ├── dbt/                    # Transformations: RAW → STAGING → PROD
 │   ├── models/
-│   │   ├── staging/        # One model per RAW table
-│   │   └── marts/          # fct_laps, fct_pit_stops, fct_session_results, fct_stints,
-│   │                       # fct_starting_grid, fct_team_radio, dim_drivers, dim_sessions
+│   │   ├── staging/        # One view per RAW table (clean types, renamed cols)
+│   │   │   ├── stg_sessions.sql
+│   │   │   ├── stg_meetings.sql
+│   │   │   ├── stg_drivers.sql
+│   │   │   ├── stg_laps.sql
+│   │   │   ├── stg_stints.sql
+│   │   │   ├── stg_pit.sql
+│   │   │   ├── stg_position.sql
+│   │   │   ├── stg_intervals.sql
+│   │   │   ├── stg_car_data.sql
+│   │   │   ├── stg_location.sql
+│   │   │   ├── stg_weather.sql
+│   │   │   ├── stg_race_control.sql
+│   │   │   ├── stg_session_result.sql
+│   │   │   ├── stg_starting_grid.sql
+│   │   │   ├── stg_team_radio.sql
+│   │   │   ├── stg_overtakes.sql
+│   │   │   ├── stg_championship_drivers.sql
+│   │   │   └── stg_championship_teams.sql
+│   │   └── marts/          # Dims and facts in PROD schema
+│   │       ├── dim_sessions.sql
+│   │       ├── dim_meetings.sql
+│   │       ├── dim_drivers.sql
+│   │       ├── dim_championship_drivers.sql
+│   │       ├── dim_championship_teams.sql
+│   │       ├── fct_laps.sql
+│   │       ├── fct_stints.sql
+│   │       ├── fct_pit_stops.sql
+│   │       ├── fct_session_results.sql
+│   │       ├── fct_race_positions.sql
+│   │       ├── fct_intervals.sql
+│   │       ├── fct_car_data.sql
+│   │       ├── fct_location.sql
+│   │       ├── fct_weather.sql
+│   │       ├── fct_race_control.sql
+│   │       ├── fct_overtakes.sql
+│   │       ├── fct_starting_grid.sql
+│   │       └── fct_team_radio.sql
 │   ├── tests/
 │   ├── macros/
 │   └── dbt_project.yml
