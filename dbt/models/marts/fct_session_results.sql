@@ -4,11 +4,10 @@ with results as (
 
 grid as (
     select
-        g.driver_number,
-        g.grid_position,
-        s.meeting_key
-    from {{ ref('stg_starting_grid') }} g
-    inner join {{ ref('stg_sessions') }} s on g.session_key = s.session_key
+        driver_number,
+        grid_position,
+        meeting_key
+    from {{ ref('stg_starting_grid') }}
 ),
 
 drivers as (

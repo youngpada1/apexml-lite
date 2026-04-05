@@ -76,7 +76,7 @@ def render(session):
                     st.markdown(f"🏆 **{row['WINNER_NAME']}** — {row['WINNER_TEAM']}")
                 else:
                     st.caption("No result yet")
-                if st.button("View →", key=f"race_{row['SESSION_KEY']}"):
+                if st.button("View →", key=f"race_{row['SESSION_KEY']}_{i}"):
                     st.session_state["selected_meeting_key"] = int(row["MEETING_KEY"])
                     st.session_state["selected_session_key"] = int(row["SESSION_KEY"])
                     st.session_state["page"] = "race"
