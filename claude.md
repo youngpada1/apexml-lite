@@ -139,3 +139,13 @@ Never skip:
 
 - Treat this file as the source of truth for behavior
 - Optimize for clarity, safety, and collaboration
+
+---
+
+## 🖥️ Local Streamlit Command
+
+`uv run` does not inherit shell exports. Always use:
+
+```bash
+cd /Users/youngpadawan/dev/apexml-lite/apexml-lite/streamlit && uv run --env-file ../ingestion/.env streamlit run app.py
+```

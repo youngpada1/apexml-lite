@@ -11,6 +11,29 @@ from cryptography.hazmat.primitives import serialization
 import config
 from client import NON_SESSION_ENDPOINTS, BULK_ENDPOINTS
 
+# Natural dedup keys per endpoint — used for MERGE to prevent duplicate inserts.
+# Fields must match exact JSON keys in the raw_data VARIANT.
+MERGE_KEYS: dict[str, list[str]] = {
+    "car_data":            ["session_key", "driver_number", "date"],
+    "drivers":             ["session_key", "driver_number"],
+    "intervals":           ["session_key", "driver_number", "date"],
+    "laps":                ["session_key", "driver_number", "lap_number"],
+    "location":            ["session_key", "driver_number", "date"],
+    "meetings":            ["meeting_key"],
+    "overtakes":           ["session_key", "overtaking_driver_number", "overtaken_driver_number", "date"],
+    "pit":                 ["session_key", "driver_number", "lap_number"],
+    "position":            ["session_key", "driver_number", "date"],
+    "race_control":        ["session_key", "date", "message"],
+    "sessions":            ["session_key"],
+    "session_result":      ["session_key", "driver_number"],
+    "starting_grid":       ["session_key", "driver_number"],
+    "stints":              ["session_key", "driver_number", "stint_number"],
+    "team_radio":          ["session_key", "driver_number", "date"],
+    "weather":             ["session_key", "date"],
+    "championship_drivers": ["driver_number", "position"],
+    "championship_teams":  ["team_name", "position"],
+}
+
 
 def _get_connection():
     with open(Path(config.SNOWFLAKE_PRIVATE_KEY_PATH), "rb") as f:
@@ -50,16 +73,11 @@ def get_loaded_session_keys() -> set[int]:
 
 
 def get_incomplete_session_keys(endpoints: list[str]) -> set[int]:
-    """Return session keys that are missing data in any of the given endpoints.
-
-    A session is considered incomplete if it exists in SESSIONS but has 0 rows
-    in any of the specified endpoint tables.
-    """
+    """Return session keys that are missing data in any of the given endpoints."""
     try:
         conn = _get_connection()
         cur = conn.cursor()
 
-        # Get all known session keys
         cur.execute(
             f"SELECT DISTINCT raw_data:session_key::integer "
             f"FROM {config.SNOWFLAKE_DATABASE}.{config.SNOWFLAKE_SCHEMA}.SESSIONS"
@@ -77,9 +95,8 @@ def get_incomplete_session_keys(endpoints: list[str]) -> set[int]:
                     count = cur.fetchone()[0]
                     if count == 0:
                         incomplete.add(session_key)
-                        break  # no need to check other endpoints for this session
+                        break
                 except Exception:
-                    # table doesn't exist yet — session is incomplete
                     incomplete.add(session_key)
                     break
 
@@ -98,30 +115,56 @@ def ensure_table(cur, table: str) -> None:
     )
 
 
-def has_session_data(cur, table: str, session_key: int) -> bool:
-    """Return True if this session_key already has data in the table."""
-    cur.execute(
-        f"SELECT COUNT(*) FROM {table.upper()} "
-        f"WHERE raw_data:session_key::integer = {session_key}"
-    )
-    return cur.fetchone()[0] > 0
+def _build_merge_condition(endpoint: str) -> str:
+    """Build the ON clause for MERGE using the natural key fields for this endpoint."""
+    keys = MERGE_KEYS.get(endpoint, [])
+    if not keys:
+        return "1=0"  # no key defined — never match, always insert (safe fallback)
+
+    conditions = []
+    for key in keys:
+        # Infer Snowflake cast type from field name
+        if key in ("date", "recorded_at"):
+            cast = "::timestamp_ntz"
+        elif key in ("message", "team_name", "classified_position", "compound"):
+            cast = "::string"
+        else:
+            cast = "::integer"
+        conditions.append(
+            f"target.raw_data:{key}{cast} = source.raw_data:{key}{cast}"
+        )
+    return " AND ".join(conditions)
 
 
 def load_rows(conn, table: str, rows: list[dict]) -> int:
-    """Insert rows as VARIANT using write_pandas. Returns number of rows inserted."""
+    """Upsert rows as VARIANT using MERGE on natural key. Returns number of rows inserted."""
     if not rows:
         return 0
 
+    endpoint = table.lower()
     df = pd.DataFrame({"RAW_DATA": [json.dumps(row) for row in rows]})
     cur = conn.cursor()
-    cur.execute(f"CREATE TABLE IF NOT EXISTS {table.upper()} (raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())")
+    cur.execute(
+        f"CREATE TABLE IF NOT EXISTS {table.upper()} "
+        f"(raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())"
+    )
 
     tmp_table = f"{table.upper()}_TMP"
     cur.execute(f"CREATE TEMP TABLE IF NOT EXISTS {tmp_table} (raw_data STRING)")
     write_pandas(conn, df, tmp_table, auto_create_table=False, overwrite=True)
-    cur.execute(f"INSERT INTO {table.upper()} (raw_data) SELECT PARSE_JSON(raw_data) FROM {tmp_table}")
+
+    merge_condition = _build_merge_condition(endpoint)
+    cur.execute(f"""
+        MERGE INTO {table.upper()} AS target
+        USING (SELECT PARSE_JSON(raw_data) AS raw_data FROM {tmp_table}) AS source
+        ON {merge_condition}
+        WHEN NOT MATCHED THEN
+            INSERT (raw_data, loaded_at) VALUES (source.raw_data, CURRENT_TIMESTAMP())
+    """)
+
+    inserted = cur.rowcount
     cur.execute(f"DROP TABLE IF EXISTS {tmp_table}")
-    return len(rows)
+    return inserted
 
 
 def load_bulk(data: dict[str, list[dict]]) -> None:
@@ -145,16 +188,12 @@ def load_bulk(data: dict[str, list[dict]]) -> None:
 
 
 def load_all(data: dict[str, list[dict] | None]) -> None:
-    """Create tables and load all endpoint data into Snowflake RAW schema.
+    """Create tables and upsert all endpoint data into Snowflake RAW schema.
 
     rows=None  → API confirmed no data (404/422), skip silently — do not retry
     rows=[]    → fetch failed with a retryable error, skip — will retry next run
-    rows=[...] → load into Snowflake
+    rows=[...] → MERGE into Snowflake (idempotent — no duplicates regardless of reruns)
     """
-    session_key = None
-    if "sessions" in data and data["sessions"]:
-        session_key = data["sessions"][0].get("session_key")
-
     conn = _get_connection()
     try:
         cur = conn.cursor()
@@ -169,13 +208,10 @@ def load_all(data: dict[str, list[dict] | None]) -> None:
             elif not rows:
                 print(f"  Skipping {endpoint} — fetch failed, will retry next run")
                 continue
-            elif session_key and has_session_data(cur, endpoint, session_key):
-                print(f"  Skipping {endpoint} — already loaded for session {session_key}")
-                continue
 
             print(f"  Loading {endpoint}...")
             inserted = load_rows(conn, endpoint, rows)
-            print(f"  Inserted {inserted} rows into RAW.{endpoint.upper()}")
+            print(f"  Inserted {inserted} new rows into RAW.{endpoint.upper()}")
         conn.commit()
     finally:
         conn.close()
