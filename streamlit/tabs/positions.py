@@ -113,7 +113,7 @@ def render(session, session_key: int):
             as_index=False
         ).size().drop(columns="size")
 
-        summary = summary.sort_values("FINISH_POSITION")
+        summary = summary.sort_values("FINISH_POSITION", na_position="last").reset_index(drop=True)
 
         display = pd.DataFrame()
         display["DRIVER"]   = summary["DRIVER_NAME"]
@@ -121,22 +121,23 @@ def render(session, session_key: int):
         display["TEAM"]     = summary["TEAM_NAME"]
         display["GRID"]     = summary["GRID_POSITION"].apply(lambda x: int(x) if pd.notna(x) else "—")
         display["FINISH"]   = summary["FINISH_POSITION"].apply(lambda x: int(x) if pd.notna(x) else "—")
-        display["+/−"]      = summary["POSITIONS_GAINED"].apply(
-            lambda x: f"+{int(x)}" if pd.notna(x) and x > 0 else (str(int(x)) if pd.notna(x) and x != 0 else "—")
+        # positions_gained = finish - grid, so negative = gained places, positive = lost places
+        display["TREND"]    = summary["POSITIONS_GAINED"].apply(
+            lambda x: f"↑ {abs(int(x))}" if pd.notna(x) and x < 0 else (f"↓ {abs(int(x))}" if pd.notna(x) and x > 0 else "—")
         )
 
         def style_summary(df):
             styles = pd.DataFrame("", index=df.index, columns=df.columns)
             for i, row in df.iterrows():
                 color = TEAM_COLORS.get(summary.iloc[i]["TEAM_NAME"], "#888")
-                styles.at[i, "ACR"]  = f"color: {color}; font-weight: 700; font-family: monospace;"
-                styles.at[i, "TEAM"] = f"color: {color}; font-size: 11px;"
+                styles.at[i, "ACR"]   = f"color: {color}; font-weight: 700; font-family: monospace;"
+                styles.at[i, "TEAM"]  = f"color: {color}; font-size: 11px;"
                 gained = summary.iloc[i]["POSITIONS_GAINED"]
                 if pd.notna(gained):
-                    if gained > 0:
-                        styles.at[i, "+/−"] = "color: #00ff88; font-weight: 700;"
-                    elif gained < 0:
-                        styles.at[i, "+/−"] = "color: #ff4444; font-weight: 700;"
+                    if gained < 0:
+                        styles.at[i, "TREND"] = "color: #00ff88; font-weight: 700; font-size: 16px;"
+                    elif gained > 0:
+                        styles.at[i, "TREND"] = "color: #ff4444; font-weight: 700; font-size: 16px;"
             return styles
 
         st.dataframe(
