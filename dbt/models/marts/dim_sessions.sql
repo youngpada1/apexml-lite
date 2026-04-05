@@ -9,6 +9,7 @@ meetings as (
 joined as (
     select
         s.session_key,
+        s.meeting_key,
         s.session_name,
         s.session_type,
         s.circuit_short_name,

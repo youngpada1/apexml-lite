@@ -15,7 +15,7 @@ ApexML-Lite is a fully Snowflake-native F1 analytics platform that:
 
 - **Extracts** real-time Formula 1 data from the OpenF1 API using Python (uv + httpx)
 - **Loads** data directly into Snowflake RAW schema (no intermediate storage)
-- **Transforms** data using dbt (RAW → STAGING → ANALYTICS)
+- **Transforms** data using dbt (RAW → STAGING → PROD)
 - **Predicts** lap time degradation and race outcomes with Snowflake Cortex FORECAST()
 - **Chats** about F1 data via a Cortex COMPLETE() powered chatbot
 - **Visualises** everything through Streamlit in Snowflake (no external hosting)
@@ -38,16 +38,18 @@ OpenF1 API (18 endpoints)
 ├─────────────────────────────────────────────────────────┤
 │  RAW schema       │  Landing zone — raw JSON rows        │
 │  STAGING schema   │  dbt: clean types, rename columns    │
-│  ANALYTICS schema │  dbt: facts, dims, KPIs              │
+│  PROD schema      │  dbt: facts, dims, KPIs              │
 ├─────────────────────────────────────────────────────────┤
 │  Cortex FORECAST()   │  Lap degradation & race outcomes  │
 │  Cortex COMPLETE()   │  F1 chatbot (natural language)    │
-│  Cortex Analyst      │  Semantic model over ANALYTICS    │
+│  Cortex Analyst      │  Semantic model over PROD         │
 ├─────────────────────────────────────────────────────────┤
 │  Streamlit in Snowflake                                  │
-│    Tab 1: Dashboard   (telemetry & KPIs)                 │
-│    Tab 2: Chatbot     (Cortex COMPLETE)                  │
-│    Tab 3: Forecast    (Cortex FORECAST agentic AI)       │
+│    Calendar: Race Calendar & Results                     │
+│    Race:     Results, Positions, Strategy, Lap Times,    │
+│              Track Dominance, Telemetry                  │
+│    Chatbot:  Cortex COMPLETE() interface                 │
+│    Forecast: Cortex FORECAST() viewer                    │
 └─────────────────────────────────────────────────────────┘
          ↑
 ┌────────────────────┐
@@ -88,20 +90,31 @@ apexml-lite/
 │   │   └── config.py       # Env-based config
 │   ├── pyproject.toml
 │   └── .env.example
-├── dbt/                    # Transformations: RAW → STAGING → ANALYTICS
+├── dbt/                    # Transformations: RAW → STAGING → PROD
 │   ├── models/
 │   │   ├── staging/        # One model per RAW table
-│   │   └── marts/          # fct_laps, fct_pit_stops, dim_drivers, dim_sessions
+│   │   └── marts/          # fct_laps, fct_pit_stops, fct_session_results, fct_stints,
+│   │                       # fct_starting_grid, fct_team_radio, dim_drivers, dim_sessions
 │   ├── tests/
 │   ├── macros/
 │   └── dbt_project.yml
 ├── streamlit/              # Streamlit in Snowflake app
-│   ├── app.py
-│   ├── pages/
-│   │   ├── dashboard.py
+│   ├── app.py              # Thin router (~30 lines)
+│   ├── tabs/
+│   │   ├── calendar.py     # Race Calendar & Results grid
+│   │   ├── race.py         # Race header + 6 sub-tabs
+│   │   ├── results.py      # Tab 1: Session results table
+│   │   ├── positions.py    # Tab 2: Race positions chart
+│   │   ├── strategy.py     # Tab 3: Tyre strategy Gantt
+│   │   ├── lap_times.py    # Tab 4: Lap times chart
+│   │   ├── track_dominance.py  # Tab 5: Track dominance map
+│   │   ├── telemetry.py    # Tab 6: Driver telemetry
 │   │   ├── chatbot.py      # Cortex COMPLETE() interface
 │   │   └── forecast.py     # Cortex FORECAST() viewer
-│   └── environment.yml
+│   ├── utils/
+│   │   ├── connection.py   # Snowpark session (local + SiS)
+│   │   └── colors.py       # Team & tyre colour constants
+│   └── pyproject.toml
 ├── snowflake/
 │   └── cortex/
 │       ├── semantic_model.yaml   # Cortex Analyst semantic layer
@@ -128,39 +141,13 @@ apexml-lite/
 
 ## Dependencies
 
-Managed with **uv** (see [pyproject.toml](pyproject.toml))
+Managed with **uv** per module (see each module's `pyproject.toml`).
 
-### Direct Dependencies
-
-```
-None yet — see ingestion/pyproject.toml for ingestion deps
-```
-
-### All Installed Packages (16 total)
-
-<details>
-<summary>View all packages</summary>
-
-```
-annotated-types                          0.7.0
-anthropic                                0.86.0
-anyio                                    4.13.0
-certifi                                  2026.2.25
-distro                                   1.9.0
-docstring-parser                         0.17.0
-h11                                      0.16.0
-httpcore                                 1.0.9
-httpx                                    0.28.1
-idna                                     3.11
-jiter                                    0.13.0
-pydantic                                 2.12.5
-pydantic-core                            2.41.5
-sniffio                                  1.3.1
-typing-extensions                        4.15.0
-typing-inspection                        0.4.2
-```
-
-</details>
+| Module | Key Dependencies |
+|---|---|
+| `ingestion/` | httpx, snowflake-connector-python, cryptography |
+| `dbt/` | dbt-core, dbt-snowflake |
+| `streamlit/` | streamlit, snowflake-snowpark-python, pandas, plotly, altair |
 
 ---
 
