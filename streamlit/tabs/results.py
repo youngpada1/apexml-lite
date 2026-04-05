@@ -24,7 +24,7 @@ def render(session, session_key: int):
     display["ACR"]    = results["DRIVER_ACRONYM"]
     display["TEAM"]   = results["TEAM_NAME"]
     display["GRID"]   = results["GRID_POSITION"].apply(lambda x: int(x) if pd.notna(x) else "—")
-    display["STATUS"] = results["CLASSIFIED_POSITION"]
+    display["STATUS"] = results["CLASSIFIED_POSITION"].fillna("Classified")
     display["PTS"]    = results["POINTS"].apply(lambda x: int(x) if pd.notna(x) and x > 0 else 0)
 
     def style_results(df):
