@@ -33,6 +33,10 @@ laps_with_stints as (
         on  l.session_key   = s.session_key
         and l.driver_number = s.driver_number
         and l.lap_number    between s.lap_start and s.lap_end
+    qualify row_number() over (
+        partition by l.session_key, l.driver_number, l.lap_number
+        order by s.stint_number
+    ) = 1
 )
 
 select

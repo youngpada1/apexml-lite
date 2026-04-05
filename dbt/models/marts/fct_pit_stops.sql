@@ -40,3 +40,7 @@ from pit_with_tyres pwt
 left join drivers d
     on  pwt.session_key   = d.session_key
     and pwt.driver_number = d.driver_number
+qualify row_number() over (
+    partition by pwt.session_key, pwt.driver_number, pwt.lap_number
+    order by pwt.stint_number
+) = 1
