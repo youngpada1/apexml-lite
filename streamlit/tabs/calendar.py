@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
-from utils.colors import TEAM_COLORS
 
 FLAG_EMOJI = {
     "Australia": "🇦🇺", "China": "🇨🇳", "Japan": "🇯🇵",
@@ -74,8 +73,7 @@ def render(session):
                 st.markdown(f"**Round {int(row['ROUND_NUM'])} — {flag} {row['MEETING_NAME']}**")
                 st.caption(f"{row['CIRCUIT_SHORT_NAME']} · {date_str} · {status}")
                 if has_winner:
-                    team_color = TEAM_COLORS.get(row["WINNER_TEAM"], "#888")
-                    st.markdown(f"🏆 **:{team_color}[{row['WINNER_NAME']}]** — {row['WINNER_TEAM']}")
+                    st.markdown(f"🏆 **{row['WINNER_NAME']}** — {row['WINNER_TEAM']}")
                 else:
                     st.caption("No result yet")
                 if st.button("View →", key=f"race_{row['SESSION_KEY']}"):
