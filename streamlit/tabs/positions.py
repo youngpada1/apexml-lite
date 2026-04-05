@@ -31,14 +31,14 @@ def render(session, session_key: int):
     # ── Map each position record to a lap number ──────────────────────────────
     if not laps.empty:
         # Build a lap boundary lookup per driver
-        laps["DATE_START"] = pd.to_datetime(laps["DATE_START"], utc=True)
-        laps["DATE_END"]   = pd.to_datetime(laps["DATE_END"],   utc=True)
+        laps["LAP_START_AT"] = pd.to_datetime(laps["LAP_START_AT"], utc=True)
+        laps["LAP_END_AT"]   = pd.to_datetime(laps["LAP_END_AT"],   utc=True)
         positions["RECORDED_AT"] = pd.to_datetime(positions["RECORDED_AT"], utc=True)
 
         def get_lap(row):
             driver_laps = laps[laps["DRIVER_NUMBER"] == row["DRIVER_NUMBER"]]
-            mask = (driver_laps["DATE_START"] <= row["RECORDED_AT"]) & \
-                   (row["RECORDED_AT"] <= driver_laps["DATE_END"])
+            mask = (driver_laps["LAP_START_AT"] <= row["RECORDED_AT"]) & \
+                   (row["RECORDED_AT"] <= driver_laps["LAP_END_AT"])
             matched = driver_laps[mask]
             return int(matched["LAP_NUMBER"].iloc[0]) if not matched.empty else None
 
