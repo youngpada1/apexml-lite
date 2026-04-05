@@ -8,6 +8,10 @@ grid as (
         grid_position,
         meeting_key
     from {{ ref('stg_starting_grid') }}
+    qualify row_number() over (
+        partition by meeting_key, driver_number
+        order by session_key asc
+    ) = 1
 ),
 
 drivers as (
@@ -31,9 +35,11 @@ select
     r.race_duration_s,
     r.gap_to_leader,
     case
-        when r.is_dsq = true then 'DSQ'
-        when r.is_dns = true then 'DNS'
-        when r.is_dnf = true then 'DNF'
+        when r.is_dsq = true                                                 then 'DSQ'
+        when r.is_dns = true                                                 then 'DNS'
+        when r.is_dnf = true                                                 then 'DNF'
+        when r.finish_position is null and coalesce(r.laps_completed, 0) > 0 then 'DNF'
+        when r.finish_position is null                                        then 'DNS'
         else 'Classified'
     end                                  as classified_position,
     g.grid_position,
@@ -45,8 +51,8 @@ from results r
 left join sessions s
     on  r.session_key   = s.session_key
 left join grid g
-    on  s.meeting_key       = g.meeting_key
-    and r.driver_number     = g.driver_number
+    on  s.meeting_key   = g.meeting_key
+    and r.driver_number = g.driver_number
 left join drivers d
     on  r.session_key   = d.session_key
     and r.driver_number = d.driver_number

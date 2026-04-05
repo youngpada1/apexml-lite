@@ -70,8 +70,11 @@ def render(session):
     """).to_pandas()
 
     pole = session.sql(f"""
-        SELECT driver_name FROM APEXML_DB.PROD.FCT_STARTING_GRID
-        WHERE session_key = {session_key} AND grid_position = 1 LIMIT 1
+        SELECT r.driver_name
+        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+        WHERE r.session_key = {session_key}
+        AND r.grid_position = 1
+        LIMIT 1
     """).to_pandas()
 
     c1, c2, c3 = st.columns(3)

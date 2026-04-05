@@ -37,7 +37,7 @@ def render(session):
                 ROW_NUMBER() OVER (PARTITION BY s.meeting_key ORDER BY s.session_start_at) AS rn,
                 RANK() OVER (ORDER BY s.session_start_at) AS round_num
             FROM APEXML_DB.PROD.DIM_SESSIONS s
-            WHERE s.year = {selected_year} AND s.session_type = 'Race'
+            WHERE s.year = {selected_year} AND s.session_type = 'Race' AND s.session_name = 'Race'
         ),
         winners AS (
             SELECT session_key, driver_name, team_name
