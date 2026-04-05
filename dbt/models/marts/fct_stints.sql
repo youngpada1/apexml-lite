@@ -2,8 +2,15 @@ with stints as (
     select * from {{ ref('stg_stints') }}
 ),
 
-laps as (
-    select * from {{ ref('stg_laps') }}
+clean_laps as (
+    select
+        session_key,
+        driver_number,
+        lap_number,
+        lap_duration_s
+    from {{ ref('stg_laps') }}
+    where is_pit_out_lap = false
+      and lap_duration_s < 120
 ),
 
 drivers as (
@@ -19,20 +26,22 @@ stint_laps as (
         s.tyre_age_at_start,
         s.lap_start,
         s.lap_end,
-        s.lap_end - s.lap_start + 1                     as stint_length,
-        avg(l.lap_duration_s)                           as avg_lap_time_s,
-        min(l.lap_duration_s)                           as fastest_lap_s,
-        max(l.lap_duration_s)                           as slowest_lap_s,
-        -- Degradation: difference between last and first lap of stint
-        max(case when l.lap_number = s.lap_end   then l.lap_duration_s end)
-      - min(case when l.lap_number = s.lap_start then l.lap_duration_s end)
-                                                        as lap_time_delta_s
+        s.lap_end - s.lap_start + 1                                 as stint_length,
+        count(cl.lap_number)                                        as clean_laps,
+        min(cl.lap_duration_s)                                      as fastest_lap_s,
+        avg(cl.lap_duration_s)                                      as avg_lap_time_s,
+        avg(cl.lap_duration_s) - min(cl.lap_duration_s)             as gap_to_best_s,
+        round(
+            (max(case when cl.lap_number = s.lap_end   then cl.lap_duration_s end)
+           - min(case when cl.lap_number = s.lap_start then cl.lap_duration_s end))
+            / nullif(s.lap_end - s.lap_start, 0), 3
+        )                                                           as deg_per_lap_s,
+        round(regr_slope(cl.lap_duration_s, cl.lap_number), 3)      as deg_slope_s
     from stints s
-    left join laps l
-        on  s.session_key   = l.session_key
-        and s.driver_number = l.driver_number
-        and l.lap_number    between s.lap_start and s.lap_end
-        and l.is_pit_out_lap = false
+    left join clean_laps cl
+        on  s.session_key   = cl.session_key
+        and s.driver_number = cl.driver_number
+        and cl.lap_number   between s.lap_start and s.lap_end
     group by 1, 2, 3, 4, 5, 6, 7
 )
 
