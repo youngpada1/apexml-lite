@@ -77,7 +77,7 @@ resource "snowflake_grant_privileges_to_account_role" "reader_database" {
 }
 
 # ─────────────────────────────────────────────
-# Schema grants — WRITER → RAW
+# Schema grants — WRITER → RAW + STAGING + PROD (USAGE)
 # ─────────────────────────────────────────────
 resource "snowflake_grant_privileges_to_account_role" "writer_raw_schema" {
   account_role_name = snowflake_account_role.writer.name
@@ -87,11 +87,38 @@ resource "snowflake_grant_privileges_to_account_role" "writer_raw_schema" {
   }
 }
 
+resource "snowflake_grant_privileges_to_account_role" "writer_staging_schema" {
+  account_role_name = snowflake_account_role.writer.name
+  privileges        = ["USAGE"]
+  on_schema {
+    schema_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.staging.name}\""
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "writer_prod_schema" {
+  account_role_name = snowflake_account_role.writer.name
+  privileges        = ["USAGE"]
+  on_schema {
+    schema_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+  }
+}
+
 resource "snowflake_grant_privileges_to_account_role" "writer_raw_tables" {
   account_role_name = snowflake_account_role.writer.name
   privileges        = ["INSERT", "UPDATE", "SELECT"]
   on_schema_object {
     all {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.raw.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "writer_raw_tables_future" {
+  account_role_name = snowflake_account_role.writer.name
+  privileges        = ["INSERT", "UPDATE", "SELECT"]
+  on_schema_object {
+    future {
       object_type_plural = "TABLES"
       in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.raw.name}\""
     }
@@ -120,6 +147,17 @@ resource "snowflake_grant_privileges_to_account_role" "transformer_raw_tables" {
   }
 }
 
+resource "snowflake_grant_privileges_to_account_role" "transformer_raw_tables_future" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT"]
+  on_schema_object {
+    future {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.raw.name}\""
+    }
+  }
+}
+
 resource "snowflake_grant_privileges_to_account_role" "transformer_database_create_schema" {
   account_role_name = snowflake_account_role.transformer.name
   privileges        = ["CREATE SCHEMA"]
@@ -137,11 +175,77 @@ resource "snowflake_grant_privileges_to_account_role" "transformer_staging_schem
   }
 }
 
+resource "snowflake_grant_privileges_to_account_role" "transformer_staging_tables" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    all {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.staging.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "transformer_staging_tables_future" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    future {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.staging.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "transformer_staging_views_future" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT"]
+  on_schema_object {
+    future {
+      object_type_plural = "VIEWS"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.staging.name}\""
+    }
+  }
+}
+
 resource "snowflake_grant_privileges_to_account_role" "transformer_prod_schema" {
   account_role_name = snowflake_account_role.transformer.name
   privileges        = ["USAGE", "CREATE TABLE", "CREATE VIEW"]
   on_schema {
     schema_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "transformer_prod_tables" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    all {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "transformer_prod_tables_future" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    future {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "transformer_prod_views_future" {
+  account_role_name = snowflake_account_role.transformer.name
+  privileges        = ["SELECT"]
+  on_schema_object {
+    future {
+      object_type_plural = "VIEWS"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+    }
   }
 }
 
@@ -167,11 +271,33 @@ resource "snowflake_grant_privileges_to_account_role" "reader_prod_tables" {
   }
 }
 
+resource "snowflake_grant_privileges_to_account_role" "reader_prod_tables_future" {
+  account_role_name = snowflake_account_role.reader.name
+  privileges        = ["SELECT"]
+  on_schema_object {
+    future {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+    }
+  }
+}
+
 resource "snowflake_grant_privileges_to_account_role" "reader_prod_views" {
   account_role_name = snowflake_account_role.reader.name
   privileges        = ["SELECT"]
   on_schema_object {
     all {
+      object_type_plural = "VIEWS"
+      in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "reader_prod_views_future" {
+  account_role_name = snowflake_account_role.reader.name
+  privileges        = ["SELECT"]
+  on_schema_object {
+    future {
       object_type_plural = "VIEWS"
       in_schema          = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\""
     }
