@@ -108,10 +108,14 @@ def render(session, session_key: int):
 
     # ── Tab 2: Grid Comparison ────────────────────────────────────────────────
     with tab2:
-        summary = positions.groupby(
-            ["DRIVER_ACRONYM", "DRIVER_NAME", "TEAM_NAME", "GRID_POSITION", "FINISH_POSITION", "POSITIONS_GAINED"],
-            as_index=False
-        ).size().drop(columns="size")
+        summary = session.sql(f"""
+            SELECT driver_name, driver_acronym, team_name,
+                   grid_position, finish_position, classified_position,
+                   finish_position - grid_position AS positions_gained
+            FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
+            WHERE session_key = {session_key}
+            ORDER BY finish_position NULLS LAST, grid_position NULLS LAST
+        """).to_pandas()
 
         summary = summary.sort_values("FINISH_POSITION", na_position="last").reset_index(drop=True)
 
