@@ -1,7 +1,8 @@
-"""One-off script to load race_control for all sessions into Snowflake RAW."""
+"""Load intervals for all sessions into Snowflake RAW."""
 
 import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -10,17 +11,17 @@ from cryptography.hazmat.primitives import serialization
 
 import config
 
+TABLE = "APEXML_DB.RAW.INTERVALS"
+
 
 def get_connection():
     with open(Path(config.SNOWFLAKE_PRIVATE_KEY_PATH), "rb") as f:
         private_key = serialization.load_pem_private_key(f.read(), password=None)
-
     private_key_bytes = private_key.private_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
-
     return snowflake.connector.connect(
         account=config.SNOWFLAKE_ACCOUNT,
         user=config.SNOWFLAKE_USER,
@@ -32,38 +33,39 @@ def get_connection():
     )
 
 
-def fetch_all_session_keys() -> list[int]:
+def fetch_all_sessions() -> list[dict]:
     transport = httpx.HTTPTransport(retries=3)
     with httpx.Client(timeout=30.0, transport=transport) as client:
         response = client.get(f"{config.OPENF1_BASE_URL}/sessions")
         response.raise_for_status()
-        sessions = response.json()
-    return [s["session_key"] for s in sessions if s.get("session_key")]
+        return response.json()
 
 
-def already_loaded(cur, session_key: int) -> bool:
-    cur.execute(
-        "SELECT COUNT(*) FROM APEXML_DB.RAW.RACE_CONTROL "
-        f"WHERE RAW_DATA:session_key::integer = {session_key}"
-    )
-    return cur.fetchone()[0] > 0
-
-
-def fetch_race_control(session_key: int) -> list[dict]:
+def fetch_intervals(session_key: int) -> list[dict]:
     transport = httpx.HTTPTransport(retries=3)
     with httpx.Client(timeout=30.0, transport=transport) as client:
         response = client.get(
-            f"{config.OPENF1_BASE_URL}/race_control",
+            f"{config.OPENF1_BASE_URL}/intervals",
             params={"session_key": session_key},
         )
+        if response.status_code in (404, 422):
+            return []
         response.raise_for_status()
         data = response.json()
     return data if isinstance(data, list) else []
 
 
+def already_loaded(cur, session_key: int) -> bool:
+    cur.execute(f"SELECT COUNT(*) FROM {TABLE} WHERE RAW_DATA:session_key::integer = {session_key}")
+    return cur.fetchone()[0] > 0
+
+
 def main():
-    print("Fetching all session keys from OpenF1...")
-    session_keys = fetch_all_session_keys()
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"[{ts}] Starting load_intervals")
+
+    sessions = fetch_all_sessions()
+    session_keys = [s["session_key"] for s in sessions if s.get("session_key")]
     print(f"Found {len(session_keys)} sessions")
 
     conn = get_connection()
@@ -82,33 +84,34 @@ def main():
                 skipped += 1
                 continue
 
-            records = fetch_race_control(sk)
-            if not records:
+            rows = fetch_intervals(sk)
+            if not rows:
                 print("no data, skipping.")
                 skipped += 1
                 time.sleep(0.5)
                 continue
 
-            for r in records:
+            for r in rows:
                 cur.execute(
-                    "INSERT INTO APEXML_DB.RAW.RACE_CONTROL (RAW_DATA, LOADED_AT) "
-                    "SELECT PARSE_JSON(%s), CURRENT_TIMESTAMP()",
+                    f"INSERT INTO {TABLE} (RAW_DATA, LOADED_AT) SELECT PARSE_JSON(%s), CURRENT_TIMESTAMP()",
                     (json.dumps(r),),
                 )
-            loaded += len(records)
-            print(f"{len(records)} records inserted.")
+            conn.commit()
+            loaded += len(rows)
+            print(f"{len(rows)} records inserted.")
         except Exception as e:
-            print(f"ERROR: {e}")
+            ts_err = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            print(f"ERROR [{ts_err}]: {e}")
             errors.append((sk, str(e)))
 
-        time.sleep(0.5)
+        time.sleep(1.5)
 
-    conn.commit()
     cur.close()
     conn.close()
 
-    print(f"\nDone. Loaded {loaded} records across {total - skipped - len(errors)} sessions.")
-    print(f"Skipped (no API data): {skipped}")
+    ts_end = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"\n[{ts_end}] Done. Loaded {loaded} records across {total - skipped - len(errors)} sessions.")
+    print(f"Skipped (already loaded or no data): {skipped}")
     if errors:
         print(f"Errors ({len(errors)}):")
         for sk, err in errors:
