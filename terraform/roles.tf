@@ -87,6 +87,14 @@ resource "snowflake_grant_privileges_to_account_role" "writer_raw_schema" {
   }
 }
 
+resource "snowflake_grant_privileges_to_account_role" "writer_raw_create_table" {
+  account_role_name = snowflake_account_role.writer.name
+  privileges        = ["CREATE TABLE"]
+  on_schema {
+    schema_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.raw.name}\""
+  }
+}
+
 resource "snowflake_grant_privileges_to_account_role" "writer_staging_schema" {
   account_role_name = snowflake_account_role.writer.name
   privileges        = ["USAGE"]

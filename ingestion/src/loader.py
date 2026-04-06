@@ -110,7 +110,7 @@ def get_incomplete_session_keys(endpoints: list[str]) -> set[int]:
 def ensure_table(cur, table: str) -> None:
     """Create RAW table if it doesn't exist."""
     cur.execute(
-        f"CREATE TABLE IF NOT EXISTS {table.upper()} "
+        f"CREATE TABLE IF NOT EXISTS APEXML_DB.RAW.{table.upper()} "
         f"(raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())"
     )
 
@@ -145,7 +145,7 @@ def load_rows(conn, table: str, rows: list[dict]) -> int:
     df = pd.DataFrame({"RAW_DATA": [json.dumps(row) for row in rows]})
     cur = conn.cursor()
     cur.execute(
-        f"CREATE TABLE IF NOT EXISTS {table.upper()} "
+        f"CREATE TABLE IF NOT EXISTS APEXML_DB.RAW.{table.upper()} "
         f"(raw_data VARIANT, loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())"
     )
 
@@ -155,7 +155,7 @@ def load_rows(conn, table: str, rows: list[dict]) -> int:
 
     merge_condition = _build_merge_condition(endpoint)
     cur.execute(f"""
-        MERGE INTO {table.upper()} AS target
+        MERGE INTO APEXML_DB.RAW.{table.upper()} AS target
         USING (SELECT PARSE_JSON(raw_data) AS raw_data FROM {tmp_table}) AS source
         ON {merge_condition}
         WHEN NOT MATCHED THEN
@@ -176,7 +176,7 @@ def load_bulk(data: dict[str, list[dict]]) -> None:
             if endpoint not in BULK_ENDPOINTS:
                 continue
             ensure_table(cur, endpoint)
-            cur.execute(f"TRUNCATE TABLE {endpoint.upper()}")
+            cur.execute(f"TRUNCATE TABLE APEXML_DB.RAW.{endpoint.upper()}")
             if not rows:
                 print(f"  {endpoint}: 0 rows — skipping")
                 continue
@@ -201,7 +201,7 @@ def load_all(data: dict[str, list[dict] | None]) -> None:
             ensure_table(cur, endpoint)
 
             if endpoint in NON_SESSION_ENDPOINTS:
-                cur.execute(f"TRUNCATE TABLE {endpoint.upper()}")
+                cur.execute(f"TRUNCATE TABLE APEXML_DB.RAW.{endpoint.upper()}")
             elif rows is None:
                 print(f"  Skipping {endpoint} — no data available in API")
                 continue
