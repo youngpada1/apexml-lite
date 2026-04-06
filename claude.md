@@ -121,6 +121,7 @@ Every response must include:
 - Making silent decisions
 - Large unreviewed changes
 - Ignoring existing architecture
+- NEVER suggest anything the user has explicitly rejected — once rejected, it is rejected forever
 
 ---
 
