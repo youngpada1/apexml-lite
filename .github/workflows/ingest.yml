@@ -35,7 +35,23 @@ jobs:
           echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
           chmod 600 /tmp/rsa_key.p8
 
+      - name: Check for new sessions
+        id: check
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/rsa_key.p8
+          SNOWFLAKE_DATABASE: APEXML_DB
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: APEXML_WH
+          SNOWFLAKE_ROLE: APEXML_WRITER
+        run: |
+          cd ingestion/src
+          uv run --project .. python check_new_sessions.py
+        continue-on-error: true
+
       - name: Run ingestion
+        if: steps.check.outcome == 'success'
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -66,6 +82,7 @@ jobs:
           uv run --project .. python load_location.py
 
       - name: Write dbt profiles
+        if: steps.check.outcome == 'success'
         run: |
           cat > dbt/profiles.yml << EOF
           apexml:
@@ -84,6 +101,7 @@ jobs:
           EOF
 
       - name: Run dbt
+        if: steps.check.outcome == 'success'
         run: |
           cd dbt
           uv run dbt run
