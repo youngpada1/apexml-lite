@@ -9,6 +9,7 @@ dependencies = [
     "altair==5.5.0",
     "plotly>=5.20.0",
     "cryptography>=42.0.0",
+    "fastf1>=3.3.0",
 ]
 
 [tool.uv]
