@@ -108,8 +108,8 @@ def render(session, session_key: int):
                     hovertemplate=(
                         f"<b>{acr}</b> — Stint {int(s['STINT_NUMBER'])}<br>"
                         f"{compound.capitalize()}<br>"
-                        f"Laps {int(s['LAP_START'])}–{int(s['LAP_END']) if pd.notna(s['LAP_END']) else '?'} "
-                        f"({int(length)} laps)<extra></extra>"
+                        f"Laps {int(s['LAP_START']) if pd.notna(s['LAP_START']) else '?'}–{int(s['LAP_END']) if pd.notna(s['LAP_END']) else '?'} "
+                        f"({int(length) if pd.notna(length) else '?'} laps)<extra></extra>"
                     ),
                 ))
 
@@ -135,7 +135,7 @@ def render(session, session_key: int):
         display["DRIVER"]   = detail["DRIVER_ACRONYM"]
         display["STINT"]    = detail["STINT_NUMBER"].apply(lambda x: int(x) if pd.notna(x) else "—")
         display["COMPOUND"] = detail["TYRE_COMPOUND"]
-        display["LAPS"]     = detail.apply(lambda r: f"{int(r['STINT_LENGTH'])} ({int(r['LAP_START'])}–{int(r['LAP_END'])})" if pd.notna(r["LAP_END"]) else str(int(r["STINT_LENGTH"])), axis=1)
+        display["LAPS"]     = detail.apply(lambda r: f"{int(r['STINT_LENGTH']) if pd.notna(r['STINT_LENGTH']) else '?'} ({int(r['LAP_START']) if pd.notna(r['LAP_START']) else '?'}–{int(r['LAP_END']) if pd.notna(r['LAP_END']) else '?'})" if pd.notna(r["LAP_END"]) else (str(int(r["STINT_LENGTH"])) if pd.notna(r["STINT_LENGTH"]) else "—"), axis=1)
         display["BEST"]     = detail["FASTEST_LAP_S"].apply(fmt_laptime)
         display["AVG"]      = detail["AVG_LAP_TIME_S"].apply(fmt_laptime)
         display["GAP"]      = detail["GAP_TO_BEST_S"].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
