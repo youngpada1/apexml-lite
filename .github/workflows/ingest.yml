@@ -4,15 +4,6 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Every Monday at 06:00 UTC (after race weekend)
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Ingestion mode'
-        required: true
-        default: 'new'
-        type: choice
-        options:
-          - new
-          - all
 
 permissions:
   contents: read
@@ -54,8 +45,25 @@ jobs:
           SNOWFLAKE_WAREHOUSE: APEXML_WH
           SNOWFLAKE_ROLE: APEXML_WRITER
         run: |
-          MODE=${{ github.event.inputs.mode || 'new' }}
-          cd ingestion/src && uv run --project .. python main.py --$MODE
+          cd ingestion/src
+          uv run --project .. python load_sessions.py
+          uv run --project .. python load_drivers.py
+          uv run --project .. python load_meetings.py
+          uv run --project .. python load_laps.py
+          uv run --project .. python load_stints.py
+          uv run --project .. python load_pit.py
+          uv run --project .. python load_position.py
+          uv run --project .. python load_intervals.py
+          uv run --project .. python load_race_control.py
+          uv run --project .. python load_weather.py
+          uv run --project .. python load_team_radio.py
+          uv run --project .. python load_overtakes.py
+          uv run --project .. python load_session_result.py
+          uv run --project .. python load_starting_grid.py
+          uv run --project .. python load_championship_drivers.py
+          uv run --project .. python load_championship_teams.py
+          uv run --project .. python load_car_data.py
+          uv run --project .. python load_location.py
 
       - name: Write dbt profiles
         run: |
