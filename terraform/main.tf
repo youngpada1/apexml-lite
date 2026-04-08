@@ -1,12 +1,26 @@
 # ─────────────────────────────────────────────
+# Resource Monitor
+# ─────────────────────────────────────────────
+resource "snowflake_resource_monitor" "apexml_monitor" {
+  name                    = "APEXML_MONITOR"
+  credit_quota            = 25
+  frequency               = "MONTHLY"
+  start_timestamp         = "IMMEDIATELY"
+  notify_triggers           = [75]
+  suspend_trigger           = 95
+  suspend_immediate_trigger = 100
+}
+
+# ─────────────────────────────────────────────
 # Warehouse
 # ─────────────────────────────────────────────
 resource "snowflake_warehouse" "apexml_wh" {
-  name           = var.snowflake_warehouse
-  warehouse_size = "X-SMALL"
-  auto_suspend   = 60
-  auto_resume    = true
-  comment        = "ApexML-Lite compute warehouse"
+  name             = var.snowflake_warehouse
+  warehouse_size   = "X-SMALL"
+  auto_suspend     = 60
+  auto_resume      = true
+  resource_monitor = snowflake_resource_monitor.apexml_monitor.name
+  comment          = "ApexML-Lite compute warehouse"
 }
 
 # ─────────────────────────────────────────────

@@ -1,3 +1,4 @@
+
 """Load car_data for all sessions into Snowflake RAW."""
 
 import json
