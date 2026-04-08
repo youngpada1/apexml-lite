@@ -104,7 +104,7 @@ def main():
             print(f"ERROR [{ts_err}]: {e}")
             errors.append((sk, str(e)))
 
-        time.sleep(1.5)
+        time.sleep(5)
 
     cur.close()
     conn.close()
