@@ -19,21 +19,16 @@ with col_logo:
     st.markdown("### 🏎 ApexML-Lite")
 with col_nav:
     nav = st.radio(
-        "nav", ["Race Calendar & Results", "Chatbot", "Forecast"],
+        "nav", ["Race Calendar & Results", "ApexAI"],
         horizontal=True,
         label_visibility="collapsed",
-        index=["calendar", "chatbot", "forecast"].index(
-            st.session_state["page"] if st.session_state["page"] in ["calendar", "chatbot", "forecast"] else "calendar"
-        ),
+        index=0 if st.session_state["page"] in ("calendar", "race") else 1,
     )
     if nav == "Race Calendar & Results" and st.session_state["page"] not in ("calendar", "race"):
         st.session_state["page"] = "calendar"
         st.rerun()
-    elif nav == "Chatbot" and st.session_state["page"] != "chatbot":
-        st.session_state["page"] = "chatbot"
-        st.rerun()
-    elif nav == "Forecast" and st.session_state["page"] != "forecast":
-        st.session_state["page"] = "forecast"
+    elif nav == "ApexAI" and st.session_state["page"] != "apexai":
+        st.session_state["page"] = "apexai"
         st.rerun()
 
 st.divider()
@@ -49,10 +44,6 @@ elif page == "race":
     from tabs.race import render
     render(session)
 
-elif page == "chatbot":
+elif page == "apexai":
     from tabs.chatbot import render
-    render(session)
-
-elif page == "forecast":
-    from tabs.forecast import render
     render(session)
