@@ -45,5 +45,5 @@ elif page == "race":
     render(session)
 
 elif page == "apexai":
-    from tabs.chatbot import render
+    from tabs.apexai import render
     render(session)

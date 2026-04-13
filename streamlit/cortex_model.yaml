@@ -1,0 +1,533 @@
+name: ApexML F1 Analytics
+description: >
+  F1 race data semantic model covering sessions, results, lap times, stints,
+  pit stops, championship standings, and race control for all seasons loaded.
+
+tables:
+  - name: dim_sessions
+    description: One row per session (Race, Qualifying, Practice, Sprint) with meeting and circuit context.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: DIM_SESSIONS
+    primary_key:
+      columns: [session_key]
+    time_dimensions:
+      - name: session_start_at
+        expr: SESSION_START_AT
+        description: When the session started.
+        data_type: timestamp_ntz
+      - name: session_end_at
+        expr: SESSION_END_AT
+        description: When the session ended.
+        data_type: timestamp_ntz
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        description: Unique session identifier.
+        data_type: number
+        unique: true
+      - name: meeting_key
+        expr: MEETING_KEY
+        description: Identifier for the race weekend (meeting).
+        data_type: number
+      - name: session_name
+        expr: SESSION_NAME
+        description: Name of the session e.g. Race, Qualifying, Practice 1.
+        data_type: varchar
+        sample_values: [Race, Qualifying, Sprint, Sprint Qualifying, Practice 1, Practice 2, Practice 3]
+      - name: session_type
+        expr: SESSION_TYPE
+        description: Type of session.
+        data_type: varchar
+        sample_values: [Race, Qualifying, Practice, Sprint]
+      - name: circuit_short_name
+        expr: CIRCUIT_SHORT_NAME
+        description: Short name of the circuit.
+        data_type: varchar
+        sample_values: [Monza, Silverstone, Spa, Monaco, Suzuka]
+      - name: country_name
+        expr: COUNTRY_NAME
+        description: Country where the race takes place.
+        data_type: varchar
+      - name: location
+        expr: LOCATION
+        description: City or location of the circuit.
+        data_type: varchar
+      - name: year
+        expr: YEAR
+        description: Season year.
+        data_type: number
+        sample_values: [2023, 2024, 2025, 2026]
+      - name: meeting_name
+        expr: MEETING_NAME
+        description: Full name of the race weekend e.g. British Grand Prix.
+        data_type: varchar
+      - name: meeting_official_name
+        expr: MEETING_OFFICIAL_NAME
+        description: Official sponsor name of the race weekend.
+        data_type: varchar
+
+  - name: dim_drivers
+    description: Driver dimension — one row per driver per session with team and country info.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: DIM_DRIVERS
+    primary_key:
+      columns: [session_key, driver_number]
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        description: Official F1 car number.
+        data_type: number
+      - name: full_name
+        expr: FULL_NAME
+        description: Driver full name e.g. Max Verstappen.
+        data_type: varchar
+      - name: acronym
+        expr: ACRONYM
+        description: Three letter driver acronym e.g. VER, HAM, LEC.
+        data_type: varchar
+        sample_values: [VER, HAM, LEC, NOR, PIA, SAI, RUS, ALO, STR, PER]
+      - name: team_name
+        expr: TEAM_NAME
+        description: Constructor/team name.
+        data_type: varchar
+        sample_values: [Red Bull Racing, Mercedes, Ferrari, McLaren, Aston Martin, Alpine, Williams, AlphaTauri, Alfa Romeo, Haas F1 Team]
+      - name: team_colour
+        expr: TEAM_COLOUR
+        description: Hex colour code for the team.
+        data_type: varchar
+      - name: country_code
+        expr: COUNTRY_CODE
+        description: Driver nationality country code.
+        data_type: varchar
+
+  - name: fct_session_results
+    description: Final session results — one row per driver per session with finish position, points, and grid.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_SESSION_RESULTS
+    primary_key:
+      columns: [session_key, driver_number]
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: driver_acronym
+        expr: DRIVER_ACRONYM
+        data_type: varchar
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+      - name: session_type
+        expr: SESSION_TYPE
+        data_type: varchar
+      - name: classified_position
+        expr: CLASSIFIED_POSITION
+        description: Classification status — Classified, DNF, DNS, DSQ.
+        data_type: varchar
+        sample_values: [Classified, DNF, DNS, DSQ]
+      - name: is_dnf
+        expr: IS_DNF
+        description: True if driver did not finish.
+        data_type: boolean
+      - name: is_dns
+        expr: IS_DNS
+        description: True if driver did not start.
+        data_type: boolean
+      - name: is_dsq
+        expr: IS_DSQ
+        description: True if driver was disqualified.
+        data_type: boolean
+    measures:
+      - name: finish_position
+        expr: FINISH_POSITION
+        description: Final finishing position. Lower is better.
+        data_type: number
+        default_aggregation: min
+      - name: grid_position
+        expr: GRID_POSITION
+        description: Starting grid position.
+        data_type: number
+        default_aggregation: min
+      - name: positions_gained
+        expr: POSITIONS_GAINED
+        description: Positions gained from grid to finish. Negative means gained places.
+        data_type: number
+        default_aggregation: sum
+      - name: points
+        expr: POINTS
+        description: Championship points scored.
+        data_type: number
+        default_aggregation: sum
+      - name: laps_completed
+        expr: LAPS_COMPLETED
+        description: Number of laps completed.
+        data_type: number
+        default_aggregation: sum
+      - name: race_duration_s
+        expr: RACE_DURATION_S
+        description: Total race duration in seconds.
+        data_type: number
+        default_aggregation: min
+
+  - name: fct_laps
+    description: Individual lap times per driver per session with tyre compound and sector times.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_LAPS
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: driver_acronym
+        expr: DRIVER_ACRONYM
+        data_type: varchar
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+      - name: lap_number
+        expr: LAP_NUMBER
+        data_type: number
+      - name: tyre_compound
+        expr: TYRE_COMPOUND
+        description: Tyre compound used on this lap.
+        data_type: varchar
+        sample_values: [SOFT, MEDIUM, HARD, INTERMEDIATE, WET]
+      - name: is_pit_out_lap
+        expr: IS_PIT_OUT_LAP
+        description: True if this lap started from the pit lane.
+        data_type: boolean
+      - name: tyre_age_on_lap
+        expr: TYRE_AGE_ON_LAP
+        description: How many laps old the tyre was on this lap.
+        data_type: number
+    time_dimensions:
+      - name: lap_start_at
+        expr: LAP_START_AT
+        data_type: timestamp_ntz
+    measures:
+      - name: lap_duration_s
+        expr: LAP_DURATION_S
+        description: Lap time in seconds.
+        data_type: number
+        default_aggregation: min
+        synonyms: [lap time, lap duration]
+      - name: sector_1_s
+        expr: SECTOR_1_S
+        description: Sector 1 time in seconds.
+        data_type: number
+        default_aggregation: min
+      - name: sector_2_s
+        expr: SECTOR_2_S
+        description: Sector 2 time in seconds.
+        data_type: number
+        default_aggregation: min
+      - name: sector_3_s
+        expr: SECTOR_3_S
+        description: Sector 3 time in seconds.
+        data_type: number
+        default_aggregation: min
+      - name: speed_trap_fl_kmh
+        expr: SPEED_TRAP_FL_KMH
+        description: Speed trap at the finish line in km/h.
+        data_type: number
+        default_aggregation: max
+
+  - name: fct_stints
+    description: Stint aggregates per driver per session — tyre strategy, deg, and pace per stint.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_STINTS
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: driver_acronym
+        expr: DRIVER_ACRONYM
+        data_type: varchar
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+      - name: stint_number
+        expr: STINT_NUMBER
+        data_type: number
+      - name: tyre_compound
+        expr: TYRE_COMPOUND
+        data_type: varchar
+        sample_values: [SOFT, MEDIUM, HARD, INTERMEDIATE, WET]
+      - name: lap_start
+        expr: LAP_START
+        data_type: number
+      - name: lap_end
+        expr: LAP_END
+        data_type: number
+    measures:
+      - name: stint_length
+        expr: STINT_LENGTH
+        description: Number of laps in the stint.
+        data_type: number
+        default_aggregation: sum
+      - name: fastest_lap_s
+        expr: FASTEST_LAP_S
+        description: Fastest clean lap in the stint in seconds.
+        data_type: number
+        default_aggregation: min
+      - name: avg_lap_time_s
+        expr: AVG_LAP_TIME_S
+        description: Average lap time across clean laps in seconds.
+        data_type: number
+        default_aggregation: avg
+      - name: deg_per_lap_s
+        expr: DEG_PER_LAP_S
+        description: Tyre degradation per lap in seconds. Positive = getting slower.
+        data_type: number
+        default_aggregation: avg
+      - name: tyre_age_at_start
+        expr: TYRE_AGE_AT_START
+        description: How many laps old the tyre was at the start of the stint.
+        data_type: number
+        default_aggregation: min
+
+  - name: fct_pit_stops
+    description: Pit stop events with duration and tyre compound changes.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_PIT_STOPS
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: driver_acronym
+        expr: DRIVER_ACRONYM
+        data_type: varchar
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+      - name: lap_number
+        expr: LAP_NUMBER
+        description: Lap on which the pit stop occurred.
+        data_type: number
+      - name: tyre_compound_out
+        expr: TYRE_COMPOUND_OUT
+        description: Tyre compound removed during the pit stop.
+        data_type: varchar
+      - name: tyre_compound_in
+        expr: TYRE_COMPOUND_IN
+        description: Tyre compound fitted during the pit stop.
+        data_type: varchar
+      - name: stint_number
+        expr: STINT_NUMBER
+        data_type: number
+    time_dimensions:
+      - name: pit_at
+        expr: PIT_AT
+        description: Timestamp of the pit stop.
+        data_type: timestamp_ntz
+    measures:
+      - name: pit_duration_s
+        expr: PIT_DURATION_S
+        description: Total pit stop duration in seconds.
+        data_type: number
+        default_aggregation: min
+        synonyms: [pit time, pit stop time, pit stop duration]
+
+  - name: dim_championship_drivers
+    description: Driver championship standings at each session — points and position.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: DIM_CHAMPIONSHIP_DRIVERS
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: meeting_key
+        expr: MEETING_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: championship_position
+        expr: CHAMPIONSHIP_POSITION
+        description: Driver championship position at this point in the season.
+        data_type: number
+      - name: championship_position_start
+        expr: CHAMPIONSHIP_POSITION_START
+        data_type: number
+      - name: year
+        expr: YEAR
+        data_type: number
+    measures:
+      - name: points_current
+        expr: POINTS_CURRENT
+        description: Championship points after this session.
+        data_type: number
+        default_aggregation: max
+      - name: points_start
+        expr: POINTS_START
+        description: Championship points before this session.
+        data_type: number
+        default_aggregation: max
+
+  - name: dim_championship_teams
+    description: Constructor championship standings at each session — points and position.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: DIM_CHAMPIONSHIP_TEAMS
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: meeting_key
+        expr: MEETING_KEY
+        data_type: number
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+      - name: championship_position
+        expr: CHAMPIONSHIP_POSITION
+        data_type: number
+      - name: year
+        expr: YEAR
+        data_type: number
+    measures:
+      - name: points_current
+        expr: POINTS_CURRENT
+        description: Constructor championship points after this session.
+        data_type: number
+        default_aggregation: max
+
+relationships:
+  - name: results_to_sessions
+    left_table: fct_session_results
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: laps_to_sessions
+    left_table: fct_laps
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: stints_to_sessions
+    left_table: fct_stints
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: pit_stops_to_sessions
+    left_table: fct_pit_stops
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: championship_drivers_to_sessions
+    left_table: dim_championship_drivers
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: championship_teams_to_sessions
+    left_table: dim_championship_teams
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+verified_queries:
+  - name: race_winners_2025
+    question: Who won each race in 2025?
+    sql: >
+      SELECT s.meeting_name, s.country_name, r.driver_name, r.team_name, r.points
+      FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+      WHERE s.year = 2025 AND s.session_type = 'Race' AND s.session_name = 'Race'
+        AND r.finish_position = 1
+      ORDER BY s.session_start_at
+    use_as_onboarding_question: true
+
+  - name: driver_championship_standings
+    question: What are the current driver championship standings?
+    sql: >
+      SELECT d.full_name, cd.championship_position, cd.points_current, d.team_name
+      FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS cd
+      JOIN APEXML_DB.PROD.DIM_DRIVERS d ON cd.session_key = d.session_key AND cd.driver_number = d.driver_number
+      WHERE cd.year = 2026
+        AND cd.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS WHERE year = 2026)
+      ORDER BY cd.championship_position
+    use_as_onboarding_question: true
+
+  - name: fastest_laps_by_driver
+    question: Who had the fastest lap at the last race?
+    sql: >
+      SELECT l.driver_name, l.driver_acronym, l.team_name, MIN(l.lap_duration_s) AS fastest_lap_s
+      FROM APEXML_DB.PROD.FCT_LAPS l
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON l.session_key = s.session_key
+      WHERE s.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_SESSIONS WHERE session_type = 'Race' AND session_name = 'Race')
+      GROUP BY 1, 2, 3
+      ORDER BY fastest_lap_s
+    use_as_onboarding_question: true
+
+  - name: pit_stop_performance
+    question: Which team had the fastest average pit stop this season?
+    sql: >
+      SELECT p.team_name, ROUND(AVG(p.pit_duration_s), 3) AS avg_pit_s, COUNT(*) AS pit_count
+      FROM APEXML_DB.PROD.FCT_PIT_STOPS p
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON p.session_key = s.session_key
+      WHERE s.year = 2025 AND s.session_type = 'Race' AND p.pit_duration_s IS NOT NULL
+      GROUP BY 1
+      ORDER BY avg_pit_s
+    use_as_onboarding_question: true
