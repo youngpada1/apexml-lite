@@ -494,10 +494,10 @@ verified_queries:
   - name: races_happened_this_year
     question: Which races have happened this year?
     sql: >
-      SELECT s.meeting_name, s.country_name, s.circuit_short_name, s.session_start_at
+      SELECT s.meeting_name, s.country_name, s.circuit_short_name, s.session_start_at, r.driver_name AS winner
       FROM APEXML_DB.PROD.DIM_SESSIONS s
+      JOIN APEXML_DB.PROD.FCT_SESSION_RESULTS r ON s.session_key = r.session_key AND r.finish_position = 1
       WHERE s.session_type = 'Race' AND s.session_name = 'Race'
-        AND s.session_start_at < CURRENT_TIMESTAMP()
         AND s.year = YEAR(CURRENT_DATE())
       ORDER BY s.session_start_at
     use_as_onboarding_question: true

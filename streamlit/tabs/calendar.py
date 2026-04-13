@@ -75,7 +75,12 @@ def render(session):
                 session_dt = session_dt.replace(tzinfo=timezone.utc)
 
             has_winner = pd.notna(row.get("WINNER_NAME"))
-            status = "✅ COMPLETED" if has_winner else ("🕐 UPCOMING" if not pd.notna(session_dt) or session_dt > now else "✅ COMPLETED")
+            if has_winner:
+                status = "✅ COMPLETED"
+            elif pd.notna(session_dt) and session_dt <= now:
+                status = "❌ CANCELLED"
+            else:
+                status = "🕐 UPCOMING"
             date_str = session_dt.strftime("%b %d, %Y") if pd.notna(session_dt) else "TBD"
             flag = FLAG_EMOJI.get(row["COUNTRY_NAME"], "🏁")
 
