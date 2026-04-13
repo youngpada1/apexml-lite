@@ -15,11 +15,14 @@ tables:
     time_dimensions:
       - name: session_start_at
         expr: SESSION_START_AT
-        description: When the session started.
+        description: >
+          UTC timestamp of when the session started. Use CURRENT_TIMESTAMP() or CURRENT_DATE()
+          to determine if a session has already happened (session_start_at < CURRENT_TIMESTAMP())
+          or is upcoming (session_start_at > CURRENT_TIMESTAMP()).
         data_type: timestamp_ntz
       - name: session_end_at
         expr: SESSION_END_AT
-        description: When the session ended.
+        description: UTC timestamp of when the session ended.
         data_type: timestamp_ntz
     dimensions:
       - name: session_key
@@ -488,13 +491,26 @@ relationships:
     relationship_type: many_to_one
 
 verified_queries:
-  - name: race_winners_2025
-    question: Who won each race in 2025?
+  - name: races_happened_this_year
+    question: Which races have happened this year?
     sql: >
-      SELECT s.meeting_name, s.country_name, r.driver_name, r.team_name, r.points
+      SELECT s.meeting_name, s.country_name, s.circuit_short_name, s.session_start_at
+      FROM APEXML_DB.PROD.DIM_SESSIONS s
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.session_start_at < CURRENT_TIMESTAMP()
+        AND s.year = YEAR(CURRENT_DATE())
+      ORDER BY s.session_start_at
+    use_as_onboarding_question: true
+
+  - name: race_winners_this_year
+    question: Who won each race this year?
+    sql: >
+      SELECT s.meeting_name, s.country_name, r.driver_name, r.team_name, r.points, s.session_start_at
       FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
       JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
-      WHERE s.year = 2025 AND s.session_type = 'Race' AND s.session_name = 'Race'
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.session_start_at < CURRENT_TIMESTAMP()
+        AND s.year = YEAR(CURRENT_DATE())
         AND r.finish_position = 1
       ORDER BY s.session_start_at
     use_as_onboarding_question: true
@@ -505,18 +521,22 @@ verified_queries:
       SELECT d.full_name, cd.championship_position, cd.points_current, d.team_name
       FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS cd
       JOIN APEXML_DB.PROD.DIM_DRIVERS d ON cd.session_key = d.session_key AND cd.driver_number = d.driver_number
-      WHERE cd.year = 2026
-        AND cd.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS WHERE year = 2026)
+      WHERE cd.year = YEAR(CURRENT_DATE())
+        AND cd.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS WHERE year = YEAR(CURRENT_DATE()))
       ORDER BY cd.championship_position
     use_as_onboarding_question: true
 
-  - name: fastest_laps_by_driver
+  - name: fastest_laps_last_race
     question: Who had the fastest lap at the last race?
     sql: >
       SELECT l.driver_name, l.driver_acronym, l.team_name, MIN(l.lap_duration_s) AS fastest_lap_s
       FROM APEXML_DB.PROD.FCT_LAPS l
       JOIN APEXML_DB.PROD.DIM_SESSIONS s ON l.session_key = s.session_key
-      WHERE s.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_SESSIONS WHERE session_type = 'Race' AND session_name = 'Race')
+      WHERE s.session_key = (
+        SELECT MAX(s2.session_key) FROM APEXML_DB.PROD.DIM_SESSIONS s2
+        WHERE s2.session_type = 'Race' AND s2.session_name = 'Race'
+          AND s2.session_start_at < CURRENT_TIMESTAMP()
+      )
       GROUP BY 1, 2, 3
       ORDER BY fastest_lap_s
     use_as_onboarding_question: true
@@ -527,7 +547,8 @@ verified_queries:
       SELECT p.team_name, ROUND(AVG(p.pit_duration_s), 3) AS avg_pit_s, COUNT(*) AS pit_count
       FROM APEXML_DB.PROD.FCT_PIT_STOPS p
       JOIN APEXML_DB.PROD.DIM_SESSIONS s ON p.session_key = s.session_key
-      WHERE s.year = 2025 AND s.session_type = 'Race' AND p.pit_duration_s IS NOT NULL
+      WHERE s.year = YEAR(CURRENT_DATE()) AND s.session_type = 'Race'
+        AND p.pit_duration_s IS NOT NULL
       GROUP BY 1
       ORDER BY avg_pit_s
     use_as_onboarding_question: true
