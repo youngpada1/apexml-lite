@@ -41,10 +41,9 @@ def render(session, session_key: int):
     if positions.empty:
         with tab1:
             st.info("No position data for this session.")
-        return
 
     # ── Map each position record to a lap number ──────────────────────────────
-    if not laps.empty:
+    if not positions.empty and not laps.empty:
         laps["LAP_START_AT"] = pd.to_datetime(laps["LAP_START_AT"], utc=True)
         laps["LAP_END_AT"]   = pd.to_datetime(laps["LAP_END_AT"],   utc=True)
         positions["RECORDED_AT"] = pd.to_datetime(positions["RECORDED_AT"], utc=True)
@@ -62,7 +61,7 @@ def render(session, session_key: int):
 
         positions = positions.sort_values("RECORDED_AT")
         positions = positions.groupby(["DRIVER_NUMBER", "LAP"], as_index=False).last()
-    else:
+    elif not positions.empty:
         positions["LAP"] = positions.groupby("DRIVER_NUMBER").cumcount() + 1
 
     total_laps = int(positions["LAP"].max()) if not positions.empty else 0
