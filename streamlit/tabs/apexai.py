@@ -160,8 +160,69 @@ def _handle_prediction(session, prompt: str) -> str:
 
 
 def _handle_forecast(session, prompt: str) -> tuple[str, pd.DataFrame]:
-    """Call the pre-trained SNOWFLAKE.ML.FORECAST model to project championship points."""
-    # Get remaining races this season
+    """Use Cortex COMPLETE with rich PROD context to forecast championship outcome."""
+    # Current standings
+    standings_df = _run_sql(session, """
+        SELECT d.full_name, d.team_name, cd.championship_position, cd.points_current
+        FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS cd
+        JOIN APEXML_DB.PROD.DIM_DRIVERS d ON cd.session_key = d.session_key AND cd.driver_number = d.driver_number
+        WHERE cd.year = YEAR(CURRENT_DATE())
+          AND cd.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_DRIVERS WHERE year = YEAR(CURRENT_DATE()))
+        ORDER BY cd.championship_position
+        LIMIT 10
+    """)
+
+    # Recent race results (last 5 races)
+    results_df = _run_sql(session, """
+        SELECT r.driver_name, r.team_name, r.finish_position, r.points, r.grid_position,
+               s.meeting_name, s.country_name
+        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+        WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+          AND s.year = YEAR(CURRENT_DATE())
+          AND s.session_start_at < CURRENT_TIMESTAMP()
+        ORDER BY s.session_start_at DESC
+        LIMIT 100
+    """)
+
+    # Average lap times per driver this season
+    laps_df = _run_sql(session, """
+        SELECT driver_name, team_name,
+               ROUND(AVG(lap_duration_s), 3) AS avg_lap_s,
+               ROUND(MIN(lap_duration_s), 3) AS best_lap_s,
+               COUNT(*) AS total_laps
+        FROM APEXML_DB.PROD.FCT_LAPS
+        WHERE year = YEAR(CURRENT_DATE())
+          AND lap_duration_s IS NOT NULL
+        GROUP BY driver_name, team_name
+        ORDER BY avg_lap_s
+        LIMIT 20
+    """)
+
+    # Pit stop performance per driver
+    pits_df = _run_sql(session, """
+        SELECT driver_name, team_name,
+               ROUND(AVG(pit_duration_s), 2) AS avg_pit_s,
+               COUNT(*) AS total_stops
+        FROM APEXML_DB.PROD.FCT_PIT_STOPS
+        WHERE year = YEAR(CURRENT_DATE())
+          AND pit_duration_s IS NOT NULL
+        GROUP BY driver_name, team_name
+        ORDER BY avg_pit_s
+        LIMIT 20
+    """)
+
+    # Tyre strategy — most used compounds per driver
+    stints_df = _run_sql(session, """
+        SELECT driver_name, tyre_compound, COUNT(*) AS stints
+        FROM APEXML_DB.PROD.FCT_STINTS
+        WHERE year = YEAR(CURRENT_DATE())
+        GROUP BY driver_name, tyre_compound
+        ORDER BY driver_name, stints DESC
+        LIMIT 40
+    """)
+
+    # Remaining races
     remaining_df = _run_sql(session, """
         SELECT COUNT(*) AS remaining_races
         FROM APEXML_DB.PROD.DIM_SESSIONS
@@ -172,45 +233,33 @@ def _handle_forecast(session, prompt: str) -> tuple[str, pd.DataFrame]:
     remaining = int(remaining_df.iloc[0]["REMAINING_RACES"]) if not remaining_df.empty else 0
 
     if remaining == 0:
-        return "No remaining races this season to forecast.", pd.DataFrame()
+        return "No remaining races this season to forecast.", standings_df
 
-    # Call the pre-trained ML forecast model
-    forecast_df = _run_sql(session, f"""
-        WITH raw_forecast AS (
-            SELECT * FROM TABLE(
-                APEXML_DB.PROD.FORECAST_MODEL_CORTEX!FORECAST(FORECASTING_PERIODS => {remaining})
-            )
-        )
-        SELECT
-            series_id                          AS driver_name,
-            MAX(forecast)                      AS projected_points,
-            MAX(upper_bound)                   AS upper_bound,
-            MAX(lower_bound)                   AS lower_bound
-        FROM raw_forecast
-        GROUP BY series_id
-        ORDER BY projected_points DESC
-        LIMIT 10
-    """)
+    # Build context
+    context = f"There are {remaining} races remaining this season.\n\n"
+    if not standings_df.empty:
+        context += "Current championship standings:\n" + standings_df.to_string(index=False) + "\n\n"
+    if not results_df.empty:
+        context += "Recent race results (last 5 races):\n" + results_df.to_string(index=False) + "\n\n"
+    if not laps_df.empty:
+        context += "Average lap times per driver:\n" + laps_df.to_string(index=False) + "\n\n"
+    if not pits_df.empty:
+        context += "Pit stop performance per driver:\n" + pits_df.to_string(index=False) + "\n\n"
+    if not stints_df.empty:
+        context += "Tyre strategy per driver:\n" + stints_df.to_string(index=False) + "\n"
 
-    if forecast_df.empty:
-        return (
-            "Forecast model returned no results. It may need to be initialised — "
-            "please run the setup SQL in the Snowflake UI first.",
-            pd.DataFrame(),
-        )
-
-    # COMPLETE narrative summary
     narrative = _call_complete(
         system_prompt=(
-            "You are an F1 championship analyst. Based on the ML forecast data provided, "
-            "summarise the projected championship outcome. Reference the top 3 drivers by name and projected points. "
-            "Keep it to 3-4 sentences. Be clear this is a statistical projection."
+            "You are an expert F1 championship analyst. Using all the data provided — standings, "
+            "recent results, lap times, pit stop performance and tyre strategy — project the likely "
+            "championship outcome for the remaining races. Estimate projected final points for the top 5 "
+            "drivers. Be specific with numbers and reference actual data points. Keep it to 4-6 sentences."
         ),
-        user_prompt=f"Question: {prompt}\n\nProjected final standings:\n{forecast_df.to_string(index=False)}",
-        max_tokens=400,
+        user_prompt=f"Question: {prompt}\n\nData:\n{context}",
+        max_tokens=600,
     )
 
-    return narrative, forecast_df
+    return narrative, standings_df
 
 
 COLUMN_LABELS = {
@@ -254,29 +303,51 @@ def _user_wants_chart(prompt: str) -> bool:
     return any(k in prompt.lower() for k in keywords)
 
 
-def _auto_chart(df: pd.DataFrame):
-    numeric_cols = df.select_dtypes(include="number").columns.tolist()
-    str_cols = df.select_dtypes(include="object").columns.tolist()
-    if not str_cols or not numeric_cols:
+def _smart_chart(df: pd.DataFrame, prompt: str):
+    """Ask COMPLETE which columns and chart type to use, then render."""
+    import json
+    cols_info = {c: str(df[c].dtype) for c in df.columns}
+    sample = df.head(5).to_string(index=False)
+
+    decision = _call_complete(
+        system_prompt=(
+            "You are a data visualisation expert. Respond with ONLY a single line of valid JSON. "
+            "No explanation, no markdown, no text before or after. "
+            'Format: {"chart": "bar"|"line"|"scatter", "x": "col_name", "y": "col_name", "color": "col_name"|null}. '
+            "Pick the most meaningful numeric column for y (not IDs, keys, or sequence numbers). "
+            "Use color for categorical grouping if useful."
+        ),
+        user_prompt=f"User asked: {prompt}\nColumns: {cols_info}\nSample:\n{sample}",
+        max_tokens=100,
+    )
+
+    try:
+        spec = json.loads(decision)
+        x, y, color = spec.get("x"), spec.get("y"), spec.get("color")
+        chart_type = spec.get("chart", "bar")
+        if x not in df.columns or y not in df.columns:
+            return
+        if color and color not in df.columns:
+            color = None
+
+        layout = dict(
+            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+            margin=dict(l=40, r=20, t=30, b=40),
+            height=350, showlegend=False,
+        )
+
+        if chart_type == "line":
+            fig = px.line(df, x=x, y=y, color=color, template="plotly_dark")
+        elif chart_type == "scatter":
+            fig = px.scatter(df, x=x, y=y, color=color, template="plotly_dark")
+        else:
+            fig = px.bar(df, x=x, y=y, color=color, barmode="group", template="plotly_dark")
+
+        fig.update_layout(**layout)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception:
         return
-    fig = px.bar(
-        df.sort_values(numeric_cols[0], ascending=False),
-        x=str_cols[0], y=numeric_cols[0],
-        template="plotly_dark",
-        color_discrete_sequence=["#e8002d"],
-    )
-    fig.update_layout(
-        paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-        margin=dict(l=40, r=20, t=30, b=40),
-        height=350,
-    )
-    st.plotly_chart(fig, use_container_width=True)
 
-
-def _append_prediction_message(text: str):
-    msg = {"role": "analyst", "content": [{"type": "text", "text": text}]}
-    st.session_state["apexai_messages"].append(msg)
-    return msg
 
 
 def render(session):
@@ -327,11 +398,12 @@ def render(session):
                     df = cached.get("df")
                     summary = cached.get("summary", "")
                     show_chart = cached.get("show_chart", False)
+                    cached_prompt = cached.get("prompt", "")
                     if df is not None and not df.empty:
                         if summary:
                             st.info(summary)
                         if show_chart:
-                            _auto_chart(df)
+                            _smart_chart(df, cached_prompt)
                         st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
 
     # ── Chat input ────────────────────────────────────────────────────────────
@@ -339,7 +411,7 @@ def render(session):
     prompt = st.chat_input("Ask a question, request a prediction or forecast...") or prefill
 
     if prompt:
-        user_msg = {"role": "user", "content": [{"type": "text", "text": prompt}]}
+        user_msg = {"role": "user", "content": [{"type": "text", "text": prompt}], "_route": "analyst"}
         st.session_state["apexai_messages"].append(user_msg)
 
         with st.chat_message("user"):
@@ -350,29 +422,31 @@ def render(session):
                 try:
                     # ── Route: forecast ───────────────────────────────────────
                     if _is_forecast(prompt):
+                        st.session_state["apexai_messages"][-1]["_route"] = "complete"
                         narrative, df = _handle_forecast(session, prompt)
                         st.write(narrative)
-                        analyst_msg = _append_prediction_message(narrative)
-                        msg_idx = len(st.session_state["apexai_messages"]) - 1
                         show_chart = _user_wants_chart(prompt)
                         if not df.empty:
                             if show_chart:
-                                _auto_chart(df)
+                                _smart_chart(df, prompt)
                             st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
-                        st.session_state["apexai_results"][msg_idx] = {
-                            "df": df, "summary": "", "show_chart": show_chart,
-                        }
 
                     # ── Route: prediction ─────────────────────────────────────
                     elif _is_prediction(prompt):
+                        st.session_state["apexai_messages"][-1]["_route"] = "complete"
                         prediction = _handle_prediction(session, prompt)
                         st.write(prediction)
-                        _append_prediction_message(prediction)
 
                     # ── Route: data question → Cortex Analyst ─────────────────
                     else:
-                        result = _call_analyst(st.session_state["apexai_messages"])
+                        analyst_history = [
+                            {k: v for k, v in m.items() if k != "_route"}
+                            for m in st.session_state["apexai_messages"]
+                            if m.get("_route", "analyst") == "analyst"
+                        ]
+                        result = _call_analyst(analyst_history)
                         analyst_msg = result["message"]
+                        analyst_msg["_route"] = "analyst"
                         st.session_state["apexai_messages"].append(analyst_msg)
 
                         sql_statement = None
@@ -399,12 +473,12 @@ def render(session):
                                 if summary:
                                     st.info(summary)
                                 if show_chart:
-                                    _auto_chart(df)
+                                    _smart_chart(df, prompt)
                                 st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
 
                             msg_idx = len(st.session_state["apexai_messages"]) - 1
                             st.session_state["apexai_results"][msg_idx] = {
-                                "df": df, "summary": summary, "show_chart": show_chart,
+                                "df": df, "summary": summary, "show_chart": show_chart, "prompt": prompt,
                             }
 
                 except requests.HTTPError as e:
