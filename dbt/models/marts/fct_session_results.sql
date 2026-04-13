@@ -19,7 +19,7 @@ drivers as (
 ),
 
 sessions as (
-    select session_key, meeting_key
+    select session_key, meeting_key, session_type
     from {{ ref('stg_sessions') }}
 )
 
@@ -42,8 +42,12 @@ select
         when r.finish_position is null                                        then 'DNS'
         else 'Classified'
     end                                  as classified_position,
+    s.session_type,
     g.grid_position,
-    r.finish_position - g.grid_position  as positions_gained,
+    case
+        when s.session_type = 'Race' then r.finish_position - g.grid_position
+        else null
+    end                                  as positions_gained,
     d.full_name                          as driver_name,
     d.acronym                            as driver_acronym,
     d.team_name
