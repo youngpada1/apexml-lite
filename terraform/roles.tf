@@ -313,22 +313,6 @@ resource "snowflake_grant_privileges_to_account_role" "reader_prod_views_future"
 }
 
 # ─────────────────────────────────────────────
-# ML Forecast stream grant — TRANSFORMER (read stream for task condition)
-# ─────────────────────────────────────────────
-resource "snowflake_execute" "transformer_fct_results_stream" {
-  execute = "GRANT SELECT ON STREAM APEXML_DB.PROD.FCT_RESULTS_STREAM TO ROLE APEXML_TRANSFORMER"
-  revert  = "REVOKE SELECT ON STREAM APEXML_DB.PROD.FCT_RESULTS_STREAM FROM ROLE APEXML_TRANSFORMER"
-}
-
-# ─────────────────────────────────────────────
-# ML Forecast model grant — READER (call only, no create)
-# ─────────────────────────────────────────────
-resource "snowflake_execute" "reader_forecast_model" {
-  execute = "GRANT USAGE ON MODEL APEXML_DB.PROD.FORECAST_MODEL_CORTEX TO ROLE APEXML_READER"
-  revert  = "REVOKE USAGE ON MODEL APEXML_DB.PROD.FORECAST_MODEL_CORTEX FROM ROLE APEXML_READER"
-}
-
-# ─────────────────────────────────────────────
 # Cortex Stage + AI grants — READER
 # ─────────────────────────────────────────────
 resource "snowflake_grant_privileges_to_account_role" "reader_cortex_stage" {
