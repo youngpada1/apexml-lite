@@ -5,7 +5,11 @@ description: >
 
 tables:
   - name: dim_sessions
-    description: One row per session (Race, Qualifying, Practice, Sprint) with meeting and circuit context.
+    description: >
+      One row per session (Race, Qualifying, Practice, Sprint) with meeting and circuit context.
+      A race is considered COMPLETED if it has a result in fct_session_results (finish_position = 1 exists).
+      A race is considered CANCELLED if session_start_at is in the past but no result exists in fct_session_results.
+      Never count a race as completed based on date alone — always verify a result exists.
     base_table:
       database: APEXML_DB
       schema: PROD
@@ -502,6 +506,20 @@ verified_queries:
       ORDER BY s.session_start_at
     use_as_onboarding_question: true
 
+  - name: race_count_this_year
+    question: How many races have happened this year?
+    sql: >
+      SELECT
+        COUNT(CASE WHEN r.finish_position = 1 THEN 1 END) AS races_completed,
+        COUNT(CASE WHEN r.finish_position IS NULL AND s.session_start_at < CURRENT_TIMESTAMP() THEN 1 END) AS races_cancelled,
+        COUNT(*) AS races_scheduled
+      FROM APEXML_DB.PROD.DIM_SESSIONS s
+      LEFT JOIN APEXML_DB.PROD.FCT_SESSION_RESULTS r ON s.session_key = r.session_key AND r.finish_position = 1
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND s.session_start_at < CURRENT_TIMESTAMP()
+    use_as_onboarding_question: true
+
   - name: race_winners_this_year
     question: Who won each race this year?
     sql: >
@@ -552,3 +570,119 @@ verified_queries:
       GROUP BY 1
       ORDER BY avg_pit_s
     use_as_onboarding_question: true
+
+  - name: cancelled_races_this_year
+    question: Which races were cancelled this year?
+    sql: >
+      SELECT s.meeting_name, s.country_name, s.circuit_short_name, s.session_start_at
+      FROM APEXML_DB.PROD.DIM_SESSIONS s
+      LEFT JOIN APEXML_DB.PROD.FCT_SESSION_RESULTS r ON s.session_key = r.session_key AND r.finish_position = 1
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND s.session_start_at < CURRENT_TIMESTAMP()
+        AND r.finish_position IS NULL
+      ORDER BY s.session_start_at
+
+  - name: upcoming_races_this_year
+    question: What races are coming up this year?
+    sql: >
+      SELECT s.meeting_name, s.country_name, s.circuit_short_name, s.session_start_at
+      FROM APEXML_DB.PROD.DIM_SESSIONS s
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND s.session_start_at > CURRENT_TIMESTAMP()
+      ORDER BY s.session_start_at
+
+  - name: constructor_championship_standings
+    question: What are the current constructor championship standings?
+    sql: >
+      SELECT ct.team_name, ct.championship_position, ct.points_current
+      FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_TEAMS ct
+      WHERE ct.year = YEAR(CURRENT_DATE())
+        AND ct.session_key = (SELECT MAX(session_key) FROM APEXML_DB.PROD.DIM_CHAMPIONSHIP_TEAMS WHERE year = YEAR(CURRENT_DATE()))
+      ORDER BY ct.championship_position
+
+  - name: driver_wins_this_season
+    question: How many wins does each driver have this season?
+    sql: >
+      SELECT r.driver_name, r.team_name, COUNT(*) AS wins
+      FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND r.finish_position = 1
+      GROUP BY 1, 2
+      ORDER BY wins DESC
+
+  - name: tyre_strategy_last_race
+    question: What tyre strategy did each driver use at the last race?
+    sql: >
+      SELECT st.driver_name, st.driver_acronym, st.stint_number, st.tyre_compound,
+             st.lap_start, st.lap_end, st.stint_length
+      FROM APEXML_DB.PROD.FCT_STINTS st
+      WHERE st.session_key = (
+        SELECT MAX(s.session_key) FROM APEXML_DB.PROD.DIM_SESSIONS s
+        JOIN APEXML_DB.PROD.FCT_SESSION_RESULTS r ON s.session_key = r.session_key AND r.finish_position = 1
+        WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+      )
+      ORDER BY st.driver_name, st.stint_number
+
+  - name: pole_positions_this_season
+    question: Who got pole position at each race this season?
+    sql: >
+      SELECT s.meeting_name, s.country_name, r.driver_name, r.team_name
+      FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+      WHERE s.session_type = 'Qualifying' AND s.session_name = 'Qualifying'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND r.finish_position = 1
+      ORDER BY s.session_start_at
+
+  - name: dnf_this_season
+    question: Which drivers had a DNF this season?
+    sql: >
+      SELECT s.meeting_name, r.driver_name, r.team_name, r.classified_position
+      FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND r.is_dnf = true
+      ORDER BY s.session_start_at, r.driver_name
+
+  - name: fastest_lap_each_race_this_season
+    question: Who set the fastest lap at each race this season?
+    sql: >
+      SELECT s.meeting_name, s.country_name, l.driver_name, l.team_name,
+             MIN(l.lap_duration_s) AS fastest_lap_s
+      FROM APEXML_DB.PROD.FCT_LAPS l
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON l.session_key = s.session_key
+      WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND s.session_start_at < CURRENT_TIMESTAMP()
+      GROUP BY s.meeting_name, s.country_name, l.driver_name, l.team_name
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY s.meeting_name ORDER BY MIN(l.lap_duration_s)) = 1
+      ORDER BY s.session_start_at
+
+  - name: points_scored_per_driver_last_race
+    question: How many points did each driver score at the last race?
+    sql: >
+      SELECT r.driver_name, r.driver_acronym, r.team_name, r.finish_position, r.points
+      FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+      WHERE r.session_key = (
+        SELECT MAX(s.session_key) FROM APEXML_DB.PROD.DIM_SESSIONS s
+        JOIN APEXML_DB.PROD.FCT_SESSION_RESULTS r2 ON s.session_key = r2.session_key AND r2.finish_position = 1
+        WHERE s.session_type = 'Race' AND s.session_name = 'Race'
+      )
+      ORDER BY r.finish_position NULLS LAST
+
+  - name: sprint_results_this_season
+    question: What were the sprint race results this season?
+    sql: >
+      SELECT s.meeting_name, s.country_name, r.driver_name, r.team_name,
+             r.finish_position, r.points
+      FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+      JOIN APEXML_DB.PROD.DIM_SESSIONS s ON r.session_key = s.session_key
+      WHERE s.session_type = 'Sprint' AND s.session_name = 'Sprint'
+        AND s.year = YEAR(CURRENT_DATE())
+        AND s.session_start_at < CURRENT_TIMESTAMP()
+      ORDER BY s.session_start_at, r.finish_position NULLS LAST

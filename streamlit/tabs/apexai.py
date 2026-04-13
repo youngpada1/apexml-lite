@@ -74,6 +74,42 @@ def _call_complete(prompt: str) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
+COLUMN_LABELS = {
+    "MEETING_NAME":               "Race",
+    "COUNTRY_NAME":               "Country",
+    "CIRCUIT_SHORT_NAME":         "Circuit",
+    "SESSION_START_AT":           "Date & Time",
+    "SESSION_END_AT":             "End Time",
+    "SESSION_NAME":               "Session",
+    "SESSION_TYPE":               "Type",
+    "DRIVER_NAME":                "Driver",
+    "DRIVER_ACRONYM":             "Code",
+    "TEAM_NAME":                  "Team",
+    "FINISH_POSITION":            "Pos",
+    "GRID_POSITION":              "Grid",
+    "POINTS":                     "Points",
+    "CHAMPIONSHIP_POSITION":      "Standing",
+    "POINTS_CURRENT":             "Points",
+    "FULL_NAME":                  "Driver",
+    "LAP_DURATION_S":             "Lap Time (s)",
+    "FASTEST_LAP_S":              "Fastest Lap (s)",
+    "AVG_LAP_TIME_S":             "Avg Lap Time (s)",
+    "PIT_DURATION_S":             "Pit Stop (s)",
+    "AVG_PIT_S":                  "Avg Pit Stop (s)",
+    "PIT_COUNT":                  "Pit Stops",
+    "TYRE_COMPOUND":              "Tyre",
+    "STINT_LENGTH":               "Stint Laps",
+    "WINNER":                     "Winner",
+    "WINNER_NAME":                "Winner",
+    "WINNER_TEAM":                "Winner Team",
+    "YEAR":                       "Season",
+}
+
+
+def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(columns={c: COLUMN_LABELS.get(c, c.replace("_", " ").title()) for c in df.columns})
+
+
 def _run_sql(session, sql: str) -> pd.DataFrame:
     try:
         return session.sql(sql).to_pandas()
@@ -159,7 +195,7 @@ def render(session):
                             st.info(summary)
                         if show_chart:
                             _auto_chart(df)
-                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
 
     # ── Chat input ────────────────────────────────────────────────────────────
     prefill = st.session_state.pop("_apexai_prefill", None)
@@ -202,7 +238,7 @@ def render(session):
                                 st.info(summary)
                             if show_chart:
                                 _auto_chart(df)
-                            st.dataframe(df, use_container_width=True, hide_index=True)
+                            st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
 
                         msg_idx = len(st.session_state["apexai_messages"]) - 1
                         st.session_state["apexai_results"][msg_idx] = {
