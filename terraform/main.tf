@@ -53,13 +53,11 @@ resource "snowflake_schema" "prod" {
 }
 
 # ─────────────────────────────────────────────
-# Cortex Stage
+# Cortex Stage — IF NOT EXISTS prevents wiping uploaded files on re-apply
 # ─────────────────────────────────────────────
-resource "snowflake_stage" "cortex_stage" {
-  database = snowflake_database.apexml_db.name
-  schema   = snowflake_schema.prod.name
-  name     = "CORTEX_STAGE"
-  comment  = "Hosts Cortex Analyst semantic model YAML"
+resource "snowflake_execute" "cortex_stage" {
+  execute = "CREATE STAGE IF NOT EXISTS APEXML_DB.PROD.CORTEX_STAGE COMMENT = 'Hosts Cortex Analyst semantic model YAML'"
+  revert  = "DROP STAGE IF EXISTS APEXML_DB.PROD.CORTEX_STAGE"
 }
 
 # ─────────────────────────────────────────────
@@ -117,8 +115,8 @@ resource "snowflake_execute" "forecast_training_task" {
     CREATE OR REPLACE TASK APEXML_DB.PROD.FORECAST_TRAINING_CORTEX
       WAREHOUSE = '${var.snowflake_warehouse}'
       SCHEDULE  = 'USING CRON 0 8 * * MON UTC'
-      WHEN SYSTEM$STREAM_HAS_DATA('APEXML_DB.PROD.FCT_RESULTS_STREAM')
       COMMENT   = 'Retrains FORECAST_MODEL_CORTEX only when new race data lands'
+      WHEN SYSTEM$STREAM_HAS_DATA('APEXML_DB.PROD.FCT_RESULTS_STREAM')
     AS
     CREATE OR REPLACE SNOWFLAKE.ML.FORECAST APEXML_DB.PROD.FORECAST_MODEL_CORTEX(
       INPUT_DATA => SYSTEM$QUERY_REFERENCE($$

@@ -336,7 +336,7 @@ resource "snowflake_grant_privileges_to_account_role" "reader_cortex_stage" {
   privileges        = ["READ"]
   on_schema_object {
     object_type = "STAGE"
-    object_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\".\"${snowflake_stage.cortex_stage.name}\""
+    object_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\".\"CORTEX_STAGE\""
   }
 }
 
