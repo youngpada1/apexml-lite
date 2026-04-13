@@ -4,8 +4,9 @@ import plotly.graph_objects as go
 from utils.colors import TEAM_COLORS
 
 
-def render(session, session_key: int):
-    laps = session.sql(f"""
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_laps(_session, session_key: int):
+    return _session.sql(f"""
         SELECT l.lap_number, l.lap_duration_s, l.is_pit_out_lap,
                d.acronym AS driver_acronym, d.full_name AS driver_name, d.team_name
         FROM APEXML_DB.PROD.FCT_LAPS l
@@ -16,6 +17,10 @@ def render(session, session_key: int):
           AND l.lap_duration_s IS NOT NULL
         ORDER BY l.lap_number
     """).to_pandas()
+
+
+def render(session, session_key: int):
+    laps = _get_laps(session, session_key)
 
     if laps.empty:
         st.info("No lap time data for this session.")

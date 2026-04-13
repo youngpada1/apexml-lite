@@ -18,11 +18,9 @@ FLAG_COLORS = {
 }
 
 
-def render(session, session_key: int):
-    tab1, tab2, tab3 = st.tabs(["Race Positions", "Grid Comparison", "Race Control"])
-
-    # ── Load lap timestamps ───────────────────────────────────────────────────
-    laps = session.sql(f"""
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_laps(_session, session_key: int):
+    return _session.sql(f"""
         SELECT driver_number, lap_number, lap_start_at,
                DATEADD('second', lap_duration_s, lap_start_at) AS lap_end_at
         FROM APEXML_DB.PROD.FCT_LAPS
@@ -30,13 +28,46 @@ def render(session, session_key: int):
         ORDER BY driver_number, lap_number
     """).to_pandas()
 
-    positions = session.sql(f"""
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_positions(_session, session_key: int):
+    return _session.sql(f"""
         SELECT driver_number, driver_name, driver_acronym, team_name,
                position, recorded_at, grid_position, finish_position, positions_gained
         FROM APEXML_DB.PROD.FCT_RACE_POSITIONS
         WHERE session_key = {session_key}
         ORDER BY recorded_at
     """).to_pandas()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_grid_summary(_session, session_key: int):
+    return _session.sql(f"""
+        SELECT driver_name, driver_acronym, team_name,
+               grid_position, finish_position, classified_position,
+               finish_position - grid_position AS positions_gained
+        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
+        WHERE session_key = {session_key}
+        ORDER BY finish_position NULLS LAST, grid_position NULLS LAST
+    """).to_pandas()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_race_control(_session, session_key: int):
+    return _session.sql(f"""
+        SELECT recorded_at, lap_number, flag, category, message, driver_name, driver_acronym, scope, sector
+        FROM APEXML_DB.PROD.FCT_RACE_CONTROL
+        WHERE session_key = {session_key}
+        ORDER BY recorded_at
+    """).to_pandas()
+
+
+def render(session, session_key: int):
+    tab1, tab2, tab3 = st.tabs(["Race Positions", "Grid Comparison", "Race Control"])
+
+    # ── Load lap timestamps ───────────────────────────────────────────────────
+    laps      = _get_laps(session, session_key)
+    positions = _get_positions(session, session_key)
 
     if positions.empty:
         with tab1:
@@ -107,14 +138,7 @@ def render(session, session_key: int):
 
     # ── Tab 2: Grid Comparison ────────────────────────────────────────────────
     with tab2:
-        summary = session.sql(f"""
-            SELECT driver_name, driver_acronym, team_name,
-                   grid_position, finish_position, classified_position,
-                   finish_position - grid_position AS positions_gained
-            FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
-            WHERE session_key = {session_key}
-            ORDER BY finish_position NULLS LAST, grid_position NULLS LAST
-        """).to_pandas()
+        summary = _get_grid_summary(session, session_key)
 
         summary = summary.sort_values("FINISH_POSITION", na_position="last").reset_index(drop=True)
 
@@ -151,12 +175,7 @@ def render(session, session_key: int):
 
     # ── Tab 3: Race Control ───────────────────────────────────────────────────
     with tab3:
-        rc = session.sql(f"""
-            SELECT recorded_at, lap_number, flag, category, message, driver_name, driver_acronym, scope, sector
-            FROM APEXML_DB.PROD.FCT_RACE_CONTROL
-            WHERE session_key = {session_key}
-            ORDER BY recorded_at
-        """).to_pandas()
+        rc = _get_race_control(session, session_key)
 
         if rc.empty:
             st.info("No race control data for this session.")

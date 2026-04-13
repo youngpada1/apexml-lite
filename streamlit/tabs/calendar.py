@@ -14,22 +14,16 @@ FLAG_EMOJI = {
 }
 
 
-def render(session):
-    col_title, col_sel = st.columns([3, 1])
-
-    with col_title:
-        st.subheader("Race Calendar & Results")
-
-    years = session.sql(
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_years(_session):
+    return _session.sql(
         "SELECT DISTINCT year FROM APEXML_DB.PROD.DIM_SESSIONS ORDER BY year DESC"
     ).to_pandas()["YEAR"].tolist()
 
-    with col_sel:
-        selected_year = st.selectbox("Season", years, index=0, label_visibility="collapsed")
 
-    st.caption(f"{selected_year} Season Overview")
-
-    races = session.sql(f"""
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_races(_session, selected_year: int):
+    return _session.sql(f"""
         WITH race_sessions AS (
             SELECT
                 s.session_key, s.meeting_key, s.meeting_name,
@@ -54,6 +48,22 @@ def render(session):
         WHERE rs.rn = 1
         ORDER BY rs.session_start_at
     """).to_pandas()
+
+
+def render(session):
+    col_title, col_sel = st.columns([3, 1])
+
+    with col_title:
+        st.subheader("Race Calendar & Results")
+
+    years = _get_years(session)
+
+    with col_sel:
+        selected_year = st.selectbox("Season", years, index=0, label_visibility="collapsed")
+
+    st.caption(f"{selected_year} Season Overview")
+
+    races = _get_races(session, selected_year)
 
     now = datetime.now(timezone.utc)
     cols = st.columns(3)

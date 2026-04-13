@@ -3,6 +3,48 @@ import pandas as pd
 from utils.colors import TEAM_COLORS
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_sessions(_session, meeting_key: int):
+    return _session.sql(f"""
+        SELECT session_key, session_name, session_start_at, meeting_name, year
+        FROM APEXML_DB.PROD.DIM_SESSIONS
+        WHERE meeting_key = {meeting_key}
+        ORDER BY session_start_at
+    """).to_pandas()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_hero(_session, session_key: int):
+    return _session.sql(f"""
+        SELECT
+            MAX(CASE WHEN finish_position = 1 THEN driver_name END) AS race_winner,
+            MAX(CASE WHEN finish_position = 1 THEN team_name  END) AS winner_team
+        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
+        WHERE session_key = {session_key}
+    """).to_pandas().iloc[0]
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_fastest(_session, session_key: int):
+    return _session.sql(f"""
+        SELECT driver_name, MIN(lap_duration_s) AS fl
+        FROM APEXML_DB.PROD.FCT_LAPS
+        WHERE session_key = {session_key}
+        GROUP BY driver_name ORDER BY fl LIMIT 1
+    """).to_pandas()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_pole(_session, session_key: int):
+    return _session.sql(f"""
+        SELECT r.driver_name
+        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
+        WHERE r.session_key = {session_key}
+        AND r.grid_position = 1
+        LIMIT 1
+    """).to_pandas()
+
+
 def fmt_laptime(seconds):
     if seconds is None or (isinstance(seconds, float) and pd.isna(seconds)):
         return "—"
@@ -27,12 +69,7 @@ def render(session):
         st.rerun()
 
     # ── Session selector ──────────────────────────────────────────────────────
-    sessions_df = session.sql(f"""
-        SELECT session_key, session_name, session_start_at, meeting_name, year
-        FROM APEXML_DB.PROD.DIM_SESSIONS
-        WHERE meeting_key = {meeting_key}
-        ORDER BY session_start_at
-    """).to_pandas()
+    sessions_df = _get_sessions(session, meeting_key)
 
     session_options = sessions_df["SESSION_NAME"].tolist()
     current_pos = sessions_df[sessions_df["SESSION_KEY"] == session_key].index
@@ -54,28 +91,9 @@ def render(session):
             st.rerun()
 
     # ── Hero cards ────────────────────────────────────────────────────────────
-    hero = session.sql(f"""
-        SELECT
-            MAX(CASE WHEN finish_position = 1 THEN driver_name END) AS race_winner,
-            MAX(CASE WHEN finish_position = 1 THEN team_name  END) AS winner_team
-        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
-        WHERE session_key = {session_key}
-    """).to_pandas().iloc[0]
-
-    fastest = session.sql(f"""
-        SELECT driver_name, MIN(lap_duration_s) AS fl
-        FROM APEXML_DB.PROD.FCT_LAPS
-        WHERE session_key = {session_key}
-        GROUP BY driver_name ORDER BY fl LIMIT 1
-    """).to_pandas()
-
-    pole = session.sql(f"""
-        SELECT r.driver_name
-        FROM APEXML_DB.PROD.FCT_SESSION_RESULTS r
-        WHERE r.session_key = {session_key}
-        AND r.grid_position = 1
-        LIMIT 1
-    """).to_pandas()
+    hero    = _get_hero(session, session_key)
+    fastest = _get_fastest(session, session_key)
+    pole    = _get_pole(session, session_key)
 
     c1, c2, c3 = st.columns(3)
     with c1:

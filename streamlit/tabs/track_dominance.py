@@ -52,16 +52,17 @@ def load_telemetry(session, session_key, driver_number, lap_start_at, lap_end_at
     """).to_pandas()
 
 
-def render(session, session_key: int):
-    # ── Session metadata for FastF1 ───────────────────────────────────────────
-    meta = session.sql(f"""
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_meta(_session, session_key: int):
+    return _session.sql(f"""
         SELECT year, meeting_name FROM APEXML_DB.PROD.DIM_SESSIONS
         WHERE session_key = {session_key} LIMIT 1
     """).to_pandas()
-    ff1_year  = int(meta["YEAR"].iloc[0])        if not meta.empty else None
-    ff1_event = str(meta["MEETING_NAME"].iloc[0]) if not meta.empty else None
 
-    laps = session.sql(f"""
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_laps(_session, session_key: int):
+    return _session.sql(f"""
         SELECT l.lap_number, l.lap_duration_s, l.lap_start_at,
                DATEADD('second', l.lap_duration_s, l.lap_start_at) AS lap_end_at,
                l.driver_number,
@@ -75,6 +76,15 @@ def render(session, session_key: int):
           AND l.is_pit_out_lap = false
         ORDER BY l.lap_number
     """).to_pandas()
+
+
+def render(session, session_key: int):
+    # ── Session metadata for FastF1 ───────────────────────────────────────────
+    meta      = _get_meta(session, session_key)
+    ff1_year  = int(meta["YEAR"].iloc[0])        if not meta.empty else None
+    ff1_event = str(meta["MEETING_NAME"].iloc[0]) if not meta.empty else None
+
+    laps = _get_laps(session, session_key)
 
     if laps.empty:
         st.info("No lap data for this session.")

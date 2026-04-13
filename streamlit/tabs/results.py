@@ -3,16 +3,21 @@ import pandas as pd
 from utils.colors import TEAM_COLORS
 
 
-def render(session, session_key: int):
-    st.markdown("#### Session Results")
-
-    results = session.sql(f"""
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_results(_session, session_key: int):
+    return _session.sql(f"""
         SELECT finish_position, driver_name, driver_acronym, team_name,
                grid_position, classified_position, points
         FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
         WHERE session_key = {session_key}
         ORDER BY finish_position
     """).to_pandas()
+
+
+def render(session, session_key: int):
+    st.markdown("#### Session Results")
+
+    results = _get_results(session, session_key)
 
     if results.empty:
         st.info("No results data for this session.")

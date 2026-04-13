@@ -27,9 +27,9 @@ def fmt_deg(s):
     return f"→ {sign}{s:.2f}s/lap"
 
 
-def render(session, session_key: int):
-    # Always use the Race session for strategy data
-    race_session = session.sql(f"""
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_race_key(_session, session_key: int):
+    df = _session.sql(f"""
         SELECT s2.session_key
         FROM APEXML_DB.PROD.DIM_SESSIONS s1
         JOIN APEXML_DB.PROD.DIM_SESSIONS s2
@@ -39,10 +39,12 @@ def render(session, session_key: int):
           AND s2.session_name = 'Race'
         LIMIT 1
     """).to_pandas()
+    return int(df.iloc[0]["SESSION_KEY"]) if not df.empty else session_key
 
-    race_key = int(race_session.iloc[0]["SESSION_KEY"]) if not race_session.empty else session_key
 
-    stints = session.sql(f"""
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_stints(_session, race_key: int):
+    return _session.sql(f"""
         SELECT driver_number, driver_name, driver_acronym, team_name,
                stint_number, tyre_compound, lap_start, lap_end, stint_length,
                clean_laps, fastest_lap_s, avg_lap_time_s, gap_to_best_s,
@@ -52,12 +54,20 @@ def render(session, session_key: int):
         ORDER BY driver_acronym, stint_number
     """).to_pandas()
 
-    # Get finish positions to sort drivers
-    results = session.sql(f"""
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_finish_positions(_session, race_key: int):
+    return _session.sql(f"""
         SELECT driver_acronym, finish_position
         FROM APEXML_DB.PROD.FCT_SESSION_RESULTS
         WHERE session_key = {race_key}
     """).to_pandas()
+
+
+def render(session, session_key: int):
+    race_key = _get_race_key(session, session_key)
+    stints   = _get_stints(session, race_key)
+    results  = _get_finish_positions(session, race_key)
 
     if stints.empty:
         st.info("No strategy data for this session.")
