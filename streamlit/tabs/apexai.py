@@ -64,19 +64,28 @@ def _call_analyst(messages: list) -> dict:
     return resp.json()
 
 
-def _call_complete(system_prompt: str, user_prompt: str, max_tokens: int = 512) -> str:
+def _call_complete(system_prompt: str, user_prompt: str, max_tokens: int = 512, json_schema: dict = None) -> str:
+    body = {
+        "model": "claude-sonnet-4-5",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_completion_tokens": max_tokens,
+        "temperature": 0.4,
+    }
+    if json_schema:
+        body["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "chart_spec",
+                "schema": json_schema,
+            },
+        }
     resp = requests.post(
         _account_url(COMPLETE_ENDPOINT),
         headers=_headers(),
-        json={
-            "model": "claude-sonnet-4-5",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "max_completion_tokens": max_tokens,
-            "temperature": 0.4,
-        },
+        json=body,
         timeout=30,
     )
     if resp.status_code != 200:
@@ -304,21 +313,33 @@ def _user_wants_chart(prompt: str) -> bool:
 
 
 def _smart_chart(df: pd.DataFrame, prompt: str):
-    """Ask COMPLETE which columns and chart type to use, then render."""
+    """Ask COMPLETE (with forced JSON schema) which columns and chart type to use, then render."""
     import json
     cols_info = {c: str(df[c].dtype) for c in df.columns}
     sample = df.head(5).to_string(index=False)
+    col_names = list(df.columns)
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "chart": {"type": "string", "enum": ["bar", "line", "scatter"]},
+            "x": {"type": "string", "enum": col_names},
+            "y": {"type": "string", "enum": col_names},
+            "color": {"type": ["string", "null"], "enum": col_names + [None]},
+        },
+        "required": ["chart", "x", "y", "color"],
+    }
 
     decision = _call_complete(
         system_prompt=(
-            "You are a data visualisation expert. Respond with ONLY a single line of valid JSON. "
-            "No explanation, no markdown, no text before or after. "
-            'Format: {"chart": "bar"|"line"|"scatter", "x": "col_name", "y": "col_name", "color": "col_name"|null}. '
-            "Pick the most meaningful numeric column for y (not IDs, keys, or sequence numbers). "
-            "Use color for categorical grouping if useful."
+            "You are a data visualisation expert. "
+            "Pick the most meaningful columns for a chart. "
+            "For y, pick the most meaningful numeric column (not IDs, keys, or sequence numbers). "
+            "Use color for categorical grouping if useful, otherwise null."
         ),
         user_prompt=f"User asked: {prompt}\nColumns: {cols_info}\nSample:\n{sample}",
         max_tokens=100,
+        json_schema=schema,
     )
 
     try:
@@ -333,7 +354,7 @@ def _smart_chart(df: pd.DataFrame, prompt: str):
         layout = dict(
             paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
             margin=dict(l=40, r=20, t=30, b=40),
-            height=350, showlegend=False,
+            height=350, showlegend=bool(color),
         )
 
         if chart_type == "line":
@@ -389,10 +410,6 @@ def render(session):
 
         elif role == "analyst":
             with st.chat_message("assistant"):
-                for item in content:
-                    if item["type"] == "text":
-                        st.write(item["text"])
-
                 if idx in st.session_state["apexai_results"]:
                     cached = st.session_state["apexai_results"][idx]
                     df = cached.get("df")
@@ -400,11 +417,12 @@ def render(session):
                     show_chart = cached.get("show_chart", False)
                     cached_prompt = cached.get("prompt", "")
                     if df is not None and not df.empty:
+                        renamed_df = _rename_columns(df)
                         if summary:
                             st.info(summary)
                         if show_chart:
-                            _smart_chart(df, cached_prompt)
-                        st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
+                            _smart_chart(renamed_df, cached_prompt)
+                        st.dataframe(renamed_df, use_container_width=True, hide_index=True)
 
     # ── Chat input ────────────────────────────────────────────────────────────
     prefill = st.session_state.pop("_apexai_prefill", None)
@@ -427,9 +445,10 @@ def render(session):
                         st.write(narrative)
                         show_chart = _user_wants_chart(prompt)
                         if not df.empty:
+                            renamed_df = _rename_columns(df)
                             if show_chart:
-                                _smart_chart(df, prompt)
-                            st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
+                                _smart_chart(renamed_df, prompt)
+                            st.dataframe(renamed_df, use_container_width=True, hide_index=True)
 
                     # ── Route: prediction ─────────────────────────────────────
                     elif _is_prediction(prompt):
@@ -451,14 +470,8 @@ def render(session):
 
                         sql_statement = None
                         for item in analyst_msg["content"]:
-                            if item["type"] == "text":
-                                st.write(item["text"])
-                            elif item["type"] == "sql":
+                            if item["type"] == "sql":
                                 sql_statement = item["statement"]
-                            elif item["type"] == "suggestions":
-                                st.markdown("**Suggested follow-ups:**")
-                                for s in item.get("suggestions", []):
-                                    st.markdown(f"- {s}")
 
                         if sql_statement:
                             df = _run_sql(session, sql_statement)
@@ -470,11 +483,12 @@ def render(session):
                                     user_prompt=f"Question: {prompt}\nResults (first 20 rows):\n{df.head(20).to_string(index=False)}",
                                     max_tokens=256,
                                 )
+                                renamed_df = _rename_columns(df)
                                 if summary:
                                     st.info(summary)
                                 if show_chart:
-                                    _smart_chart(df, prompt)
-                                st.dataframe(_rename_columns(df), use_container_width=True, hide_index=True)
+                                    _smart_chart(renamed_df, prompt)
+                                st.dataframe(renamed_df, use_container_width=True, hide_index=True)
 
                             msg_idx = len(st.session_state["apexai_messages"]) - 1
                             st.session_state["apexai_results"][msg_idx] = {
