@@ -44,6 +44,8 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastf1" },
     { name = "plotly" },
+    { name = "pyjwt" },
+    { name = "requests" },
     { name = "snowflake-snowpark-python" },
     { name = "streamlit" },
 ]
@@ -54,6 +56,8 @@ requires-dist = [
     { name = "cryptography", specifier = ">=42.0.0" },
     { name = "fastf1", specifier = ">=3.3.0" },
     { name = "plotly", specifier = ">=5.20.0" },
+    { name = "pyjwt", specifier = ">=2.8.0" },
+    { name = "requests", specifier = ">=2.31.0" },
     { name = "snowflake-snowpark-python", specifier = ">=1.11.0" },
     { name = "streamlit", specifier = ">=1.30.0" },
 ]

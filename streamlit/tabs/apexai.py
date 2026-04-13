@@ -32,8 +32,7 @@ def _headers() -> dict:
 
 
 def _account_url(template: str) -> str:
-    account = os.environ["SNOWFLAKE_ACCOUNT"].lower()
-    return template.format(account=account)
+    return template.format(account=os.environ["SNOWFLAKE_ACCOUNT"].lower())
 
 
 def _call_analyst(messages: list) -> dict:
@@ -83,47 +82,30 @@ def _run_sql(session, sql: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _auto_chart(df: pd.DataFrame):
-    if df.empty or len(df) < 2:
-        return
+def _user_wants_chart(prompt: str) -> bool:
+    keywords = ["chart", "graph", "plot", "visualis", "visualiz", "bar", "line", "show me"]
+    return any(k in prompt.lower() for k in keywords)
 
+
+def _auto_chart(df: pd.DataFrame):
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     str_cols = df.select_dtypes(include="object").columns.tolist()
 
-    if not numeric_cols:
-        return
+    x_col = str_cols[0]
+    y_col = numeric_cols[0]
 
-    # Bar chart: one categorical + one numeric
-    if str_cols and len(numeric_cols) >= 1:
-        x_col = str_cols[0]
-        y_col = numeric_cols[0]
-        if df[x_col].nunique() <= 30:
-            fig = px.bar(
-                df.sort_values(y_col, ascending=False),
-                x=x_col, y=y_col,
-                template="plotly_dark",
-                color_discrete_sequence=["#e8002d"],
-            )
-            fig.update_layout(
-                paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-                margin=dict(l=40, r=20, t=30, b=40),
-                height=350,
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            return
-
-    # Line chart: two numeric columns (first = x, second = y)
-    if len(numeric_cols) >= 2:
-        fig = px.line(
-            df, x=numeric_cols[0], y=numeric_cols[1],
-            template="plotly_dark",
-        )
-        fig.update_layout(
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            margin=dict(l=40, r=20, t=30, b=40),
-            height=350,
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    fig = px.bar(
+        df.sort_values(y_col, ascending=False),
+        x=x_col, y=y_col,
+        template="plotly_dark",
+        color_discrete_sequence=["#e8002d"],
+    )
+    fig.update_layout(
+        paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+        margin=dict(l=40, r=20, t=30, b=40),
+        height=350,
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def render(session):
@@ -166,19 +148,17 @@ def render(session):
                 for item in content:
                     if item["type"] == "text":
                         st.write(item["text"])
-                    elif item["type"] == "sql":
-                        with st.expander("View SQL", expanded=False):
-                            st.code(item["statement"], language="sql")
 
-                # Show cached result if available
                 if idx in st.session_state["apexai_results"]:
                     cached = st.session_state["apexai_results"][idx]
                     df = cached.get("df")
                     summary = cached.get("summary", "")
+                    show_chart = cached.get("show_chart", False)
                     if df is not None and not df.empty:
                         if summary:
                             st.info(summary)
-                        _auto_chart(df)
+                        if show_chart:
+                            _auto_chart(df)
                         st.dataframe(df, use_container_width=True, hide_index=True)
 
     # ── Chat input ────────────────────────────────────────────────────────────
@@ -186,7 +166,6 @@ def render(session):
     prompt = st.chat_input("Ask a question about F1 data...") or prefill
 
     if prompt:
-        # Add user message
         user_msg = {"role": "user", "content": [{"type": "text", "text": prompt}]}
         st.session_state["apexai_messages"].append(user_msg)
 
@@ -206,30 +185,30 @@ def render(session):
                             st.write(item["text"])
                         elif item["type"] == "sql":
                             sql_statement = item["statement"]
-                            with st.expander("View SQL", expanded=False):
-                                st.code(sql_statement, language="sql")
                         elif item["type"] == "suggestions":
                             st.markdown("**Suggested follow-ups:**")
                             for s in item.get("suggestions", []):
                                 st.markdown(f"- {s}")
 
-                    # Execute SQL and cache result
                     if sql_statement:
                         df = _run_sql(session, sql_statement)
                         summary = ""
+                        show_chart = _user_wants_chart(prompt)
                         if not df.empty:
                             summary = _call_complete(
                                 f"Question: {prompt}\nResults (first 20 rows):\n{df.head(20).to_string(index=False)}"
                             )
                             if summary:
                                 st.info(summary)
-                            _auto_chart(df)
+                            if show_chart:
+                                _auto_chart(df)
                             st.dataframe(df, use_container_width=True, hide_index=True)
 
                         msg_idx = len(st.session_state["apexai_messages"]) - 1
                         st.session_state["apexai_results"][msg_idx] = {
                             "df": df,
                             "summary": summary,
+                            "show_chart": show_chart,
                         }
 
                 except requests.HTTPError as e:
