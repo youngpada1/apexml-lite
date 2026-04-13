@@ -117,15 +117,13 @@ def render(session):
     from tabs.strategy        import render as render_strategy
     from tabs.lap_times       import render as render_lap_times
     from tabs.track_dominance import render as render_track_dominance
-    from tabs.telemetry       import render as render_telemetry
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📋 Results", "📍 Positions", "🏁 Strategy",
-        "⏱ Lap Times", "🗺 Track Dominance", "📡 Telemetry"
+        "⏱ Lap Times", "🗺 Track Dominance"
     ])
     with tab1: render_results(session, session_key)
     with tab2: render_positions(session, session_key)
     with tab3: render_strategy(session, session_key)
     with tab4: render_lap_times(session, session_key)
     with tab5: render_track_dominance(session, session_key)
-    with tab6: render_telemetry(session, session_key)

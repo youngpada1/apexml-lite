@@ -37,8 +37,8 @@ def get_fastest_lap(laps_df, acronym):
 
 def load_telemetry(session, session_key, driver_number, lap_start_at, lap_end_at):
     return session.sql(f"""
-        SELECT c.recorded_at, c.speed_kmh, c.throttle_pct, c.is_braking, c.drs_status, c.rpm,
-               l.pos_x, l.pos_y
+        SELECT c.recorded_at, c.speed_kmh, c.gear, c.throttle_pct, c.is_braking, c.drs_status, c.rpm,
+               l.pos_x, l.pos_y, l.pos_z
         FROM APEXML_DB.PROD.FCT_CAR_DATA c
         ASOF JOIN APEXML_DB.PROD.FCT_LOCATION l
             MATCH_CONDITION (c.recorded_at >= l.recorded_at)
@@ -230,17 +230,20 @@ def render(session, session_key: int):
             )
             st.plotly_chart(fig_spd, use_container_width=True)
 
-        # ── Telemetry 2x2 ─────────────────────────────────────────────────────
+        # ── Telemetry 3x2 ─────────────────────────────────────────────────────
         st.markdown("#### Telemetry Comparison")
         metrics = [
             ("Throttle (%)", "THROTTLE_PCT", "Throttle (%)"),
             ("Braking",      "IS_BRAKING",   "Braking"),
-            ("RPM",          "RPM",           "RPM"),
-            ("DRS",          "DRS_STATUS",    "DRS"),
+            ("Gear",         "GEAR",         "Gear"),
+            ("RPM",          "RPM",          "RPM"),
+            ("DRS",          "DRS_STATUS",   "DRS"),
+            ("Elevation",    "POS_Z",        "Elevation (m)"),
         ]
         row1 = st.columns(2)
         row2 = st.columns(2)
-        for col, (title, metric_col, ylabel) in zip([*row1, *row2], metrics):
+        row3 = st.columns(2)
+        for col, (title, metric_col, ylabel) in zip([*row1, *row2, *row3], metrics):
             with col:
                 fig = go.Figure()
                 for combo, data in tel_all.items():
