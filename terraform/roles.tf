@@ -313,6 +313,23 @@ resource "snowflake_grant_privileges_to_account_role" "reader_prod_views_future"
 }
 
 # ─────────────────────────────────────────────
+# Cortex Stage + AI grants — READER
+# ─────────────────────────────────────────────
+resource "snowflake_grant_privileges_to_account_role" "reader_cortex_stage" {
+  account_role_name = snowflake_account_role.reader.name
+  privileges        = ["READ"]
+  on_schema_object {
+    object_type = "STAGE"
+    object_name = "\"${snowflake_database.apexml_db.name}\".\"${snowflake_schema.prod.name}\".\"${snowflake_stage.cortex_stage.name}\""
+  }
+}
+
+resource "snowflake_execute" "reader_cortex_user" {
+  execute = "GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER TO ROLE ${snowflake_account_role.reader.name}"
+  revert  = "REVOKE DATABASE ROLE SNOWFLAKE.CORTEX_USER FROM ROLE ${snowflake_account_role.reader.name}"
+}
+
+# ─────────────────────────────────────────────
 # Grant roles to SYSADMIN (so admin can switch)
 # ─────────────────────────────────────────────
 resource "snowflake_grant_account_role" "writer_to_sysadmin" {

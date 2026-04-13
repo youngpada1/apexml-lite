@@ -51,3 +51,13 @@ resource "snowflake_schema" "prod" {
   name     = "PROD"
   comment  = "dbt marts — facts, dimensions, KPIs for Streamlit and Cortex"
 }
+
+# ─────────────────────────────────────────────
+# Cortex Stage
+# ─────────────────────────────────────────────
+resource "snowflake_stage" "cortex_stage" {
+  database = snowflake_database.apexml_db.name
+  schema   = snowflake_schema.prod.name
+  name     = "CORTEX_STAGE"
+  comment  = "Hosts Cortex Analyst semantic model YAML"
+}

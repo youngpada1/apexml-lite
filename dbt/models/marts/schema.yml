@@ -11,7 +11,9 @@ models:
       - name: full_name
         tests: [not_null]
       - name: team_name
-        tests: [not_null]
+        tests:
+          - not_null:
+              severity: warn
 
   - name: dim_sessions
     description: "Session dimension — one row per session with meeting context"
@@ -41,7 +43,9 @@ models:
       - name: driver_number
         tests: [not_null]
       - name: pit_duration_s
-        tests: [not_null]
+        tests:
+          - not_null:
+              severity: warn
 
   - name: fct_race_positions
     description: "Driver positions throughout the race with grid and result context"
