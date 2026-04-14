@@ -55,9 +55,8 @@ OpenF1 API (18 endpoints)
 │           FCT_WEATHER · FCT_RACE_CONTROL · FCT_OVERTAKES  │
 │           FCT_STARTING_GRID · FCT_TEAM_RADIO              │
 ├─────────────────────────────────────────────────────────┤
-│  Cortex FORECAST()   │  Lap degradation & race outcomes  │
-│  Cortex COMPLETE()   │  F1 chatbot (natural language)    │
-│  Cortex Analyst      │  Semantic model over PROD         │
+│  Cortex COMPLETE()   │  Predictions, forecasts, summaries, chart specs  │
+│  Cortex Analyst      │  Natural language to SQL via semantic model      │
 ├─────────────────────────────────────────────────────────┤
 │  Streamlit in Snowflake                                  │
 │    Calendar: Race Calendar & Results                     │
