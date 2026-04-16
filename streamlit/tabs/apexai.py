@@ -196,38 +196,41 @@ def _handle_forecast(session, prompt: str) -> tuple[str, pd.DataFrame]:
 
     # Average lap times per driver this season
     laps_df = _run_sql(session, """
-        SELECT driver_name, team_name,
-               ROUND(AVG(lap_duration_s), 3) AS avg_lap_s,
-               ROUND(MIN(lap_duration_s), 3) AS best_lap_s,
+        SELECT l.driver_name, l.team_name,
+               ROUND(AVG(l.lap_duration_s), 3) AS avg_lap_s,
+               ROUND(MIN(l.lap_duration_s), 3) AS best_lap_s,
                COUNT(*) AS total_laps
-        FROM APEXML_DB.PROD.FCT_LAPS
-        WHERE year = YEAR(CURRENT_DATE())
-          AND lap_duration_s IS NOT NULL
-        GROUP BY driver_name, team_name
+        FROM APEXML_DB.PROD.FCT_LAPS l
+        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON l.session_key = s.session_key
+        WHERE s.year = YEAR(CURRENT_DATE())
+          AND l.lap_duration_s IS NOT NULL
+        GROUP BY l.driver_name, l.team_name
         ORDER BY avg_lap_s
         LIMIT 20
     """)
 
     # Pit stop performance per driver
     pits_df = _run_sql(session, """
-        SELECT driver_name, team_name,
-               ROUND(AVG(pit_duration_s), 2) AS avg_pit_s,
+        SELECT p.driver_name, p.team_name,
+               ROUND(AVG(p.pit_duration_s), 2) AS avg_pit_s,
                COUNT(*) AS total_stops
-        FROM APEXML_DB.PROD.FCT_PIT_STOPS
-        WHERE year = YEAR(CURRENT_DATE())
-          AND pit_duration_s IS NOT NULL
-        GROUP BY driver_name, team_name
+        FROM APEXML_DB.PROD.FCT_PIT_STOPS p
+        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON p.session_key = s.session_key
+        WHERE s.year = YEAR(CURRENT_DATE())
+          AND p.pit_duration_s IS NOT NULL
+        GROUP BY p.driver_name, p.team_name
         ORDER BY avg_pit_s
         LIMIT 20
     """)
 
     # Tyre strategy — most used compounds per driver
     stints_df = _run_sql(session, """
-        SELECT driver_name, tyre_compound, COUNT(*) AS stints
-        FROM APEXML_DB.PROD.FCT_STINTS
-        WHERE year = YEAR(CURRENT_DATE())
-        GROUP BY driver_name, tyre_compound
-        ORDER BY driver_name, stints DESC
+        SELECT st.driver_name, st.tyre_compound, COUNT(*) AS stints
+        FROM APEXML_DB.PROD.FCT_STINTS st
+        JOIN APEXML_DB.PROD.DIM_SESSIONS s ON st.session_key = s.session_key
+        WHERE s.year = YEAR(CURRENT_DATE())
+        GROUP BY st.driver_name, st.tyre_compound
+        ORDER BY st.driver_name, stints DESC
         LIMIT 40
     """)
 
