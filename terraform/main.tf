@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────
 resource "snowflake_resource_monitor" "apexml_monitor" {
   name                    = "APEXML_MONITOR"
-  credit_quota            = 50
+  credit_quota            = 55
   frequency               = "MONTHLY"
   start_timestamp         = "IMMEDIATELY"
   notify_triggers           = [75]
