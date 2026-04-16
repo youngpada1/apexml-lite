@@ -439,6 +439,259 @@ tables:
         data_type: number
         default_aggregation: max
 
+  - name: fct_weather
+    description: Weather conditions sampled throughout each session — temperature, humidity, rainfall.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_WEATHER
+    primary_key:
+      columns: [session_key, recorded_at]
+    time_dimensions:
+      - name: recorded_at
+        expr: RECORDED_AT
+        description: Timestamp of the weather sample.
+        data_type: timestamp_ntz
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: session_name
+        expr: SESSION_NAME
+        data_type: varchar
+      - name: circuit_short_name
+        expr: CIRCUIT_SHORT_NAME
+        data_type: varchar
+      - name: country_name
+        expr: COUNTRY_NAME
+        data_type: varchar
+      - name: is_raining
+        expr: IS_RAINING
+        description: True if it was raining at this point.
+        data_type: boolean
+    measures:
+      - name: air_temp_c
+        expr: AIR_TEMP_C
+        description: Air temperature in Celsius.
+        data_type: number
+        default_aggregation: avg
+      - name: track_temp_c
+        expr: TRACK_TEMP_C
+        description: Track surface temperature in Celsius.
+        data_type: number
+        default_aggregation: avg
+      - name: humidity_pct
+        expr: HUMIDITY_PCT
+        description: Relative humidity percentage.
+        data_type: number
+        default_aggregation: avg
+      - name: wind_speed_ms
+        expr: WIND_SPEED_MS
+        description: Wind speed in metres per second.
+        data_type: number
+        default_aggregation: avg
+
+  - name: fct_race_control
+    description: Race control messages — flags, safety cars, penalties, incidents.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_RACE_CONTROL
+    time_dimensions:
+      - name: recorded_at
+        expr: RECORDED_AT
+        description: Timestamp of the race control message.
+        data_type: timestamp_ntz
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: category
+        expr: CATEGORY
+        description: Category of the message e.g. Flag, SafetyCar, Drs.
+        data_type: varchar
+        sample_values: [Flag, SafetyCar, Drs, ChequeredFlag]
+      - name: flag
+        expr: FLAG
+        description: Flag type e.g. GREEN, YELLOW, RED, SAFETY CAR, VIRTUAL SAFETY CAR.
+        data_type: varchar
+        sample_values: [GREEN, YELLOW, RED, SAFETY CAR, VIRTUAL SAFETY CAR, CHEQUERED]
+      - name: lap_number
+        expr: LAP_NUMBER
+        data_type: number
+      - name: message
+        expr: MESSAGE
+        description: Full race control message text.
+        data_type: varchar
+      - name: scope
+        expr: SCOPE
+        description: Scope of the message — Track, Driver, Sector.
+        data_type: varchar
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: circuit_short_name
+        expr: CIRCUIT_SHORT_NAME
+        data_type: varchar
+      - name: country_name
+        expr: COUNTRY_NAME
+        data_type: varchar
+
+  - name: fct_intervals
+    description: Gap to race leader and interval to car ahead for each driver throughout a session.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_INTERVALS
+    time_dimensions:
+      - name: recorded_at
+        expr: RECORDED_AT
+        description: Timestamp of the interval sample.
+        data_type: timestamp_ntz
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: driver_acronym
+        expr: DRIVER_ACRONYM
+        data_type: varchar
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+    measures:
+      - name: gap_to_leader_s
+        expr: GAP_TO_LEADER_S
+        description: Gap to the race leader in seconds.
+        data_type: number
+        default_aggregation: min
+      - name: interval_to_ahead_s
+        expr: INTERVAL_TO_AHEAD_S
+        description: Gap to the car directly ahead in seconds.
+        data_type: number
+        default_aggregation: min
+
+  - name: fct_overtakes
+    description: Overtake events — which driver overtook which, on which lap.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_OVERTAKES
+    time_dimensions:
+      - name: recorded_at
+        expr: RECORDED_AT
+        description: Timestamp of the overtake.
+        data_type: timestamp_ntz
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_overtaking
+        expr: DRIVER_OVERTAKING
+        data_type: number
+      - name: driver_overtaken
+        expr: DRIVER_OVERTAKEN
+        data_type: number
+      - name: lap_number
+        expr: LAP_NUMBER
+        data_type: number
+      - name: driver_overtaking_name
+        expr: DRIVER_OVERTAKING_NAME
+        data_type: varchar
+      - name: driver_overtaken_name
+        expr: DRIVER_OVERTAKEN_NAME
+        data_type: varchar
+      - name: team_overtaking
+        expr: TEAM_OVERTAKING
+        data_type: varchar
+      - name: team_overtaken
+        expr: TEAM_OVERTAKEN
+        data_type: varchar
+
+  - name: fct_starting_grid
+    description: Starting grid positions per driver per qualifying session.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: FCT_STARTING_GRID
+    primary_key:
+      columns: [session_key, driver_number]
+    dimensions:
+      - name: session_key
+        expr: SESSION_KEY
+        data_type: number
+      - name: driver_number
+        expr: DRIVER_NUMBER
+        data_type: number
+      - name: driver_name
+        expr: DRIVER_NAME
+        data_type: varchar
+      - name: driver_acronym
+        expr: DRIVER_ACRONYM
+        data_type: varchar
+      - name: team_name
+        expr: TEAM_NAME
+        data_type: varchar
+      - name: meeting_name
+        expr: MEETING_NAME
+        data_type: varchar
+      - name: session_name
+        expr: SESSION_NAME
+        data_type: varchar
+      - name: year
+        expr: YEAR
+        data_type: number
+    measures:
+      - name: grid_position
+        expr: GRID_POSITION
+        description: Qualifying grid position. 1 = pole position.
+        data_type: number
+        default_aggregation: min
+
+  - name: dim_meetings
+    description: One row per race weekend with circuit, country and location info.
+    base_table:
+      database: APEXML_DB
+      schema: PROD
+      table: DIM_MEETINGS
+    primary_key:
+      columns: [meeting_key]
+    dimensions:
+      - name: meeting_key
+        expr: MEETING_KEY
+        data_type: number
+        unique: true
+      - name: meeting_name
+        expr: MEETING_NAME
+        description: Full name of the race weekend e.g. British Grand Prix.
+        data_type: varchar
+      - name: meeting_official_name
+        expr: MEETING_OFFICIAL_NAME
+        description: Official sponsor name of the race weekend.
+        data_type: varchar
+      - name: circuit_short_name
+        expr: CIRCUIT_SHORT_NAME
+        data_type: varchar
+      - name: country_name
+        expr: COUNTRY_NAME
+        data_type: varchar
+      - name: location
+        expr: LOCATION
+        data_type: varchar
+      - name: year
+        expr: YEAR
+        data_type: number
+    time_dimensions:
+      - name: meeting_start_at
+        expr: MEETING_START_AT
+        description: Timestamp when the race weekend starts.
+        data_type: timestamp_ntz
+
 relationships:
   - name: results_to_sessions
     left_table: fct_session_results
@@ -487,6 +740,51 @@ relationships:
 
   - name: championship_teams_to_sessions
     left_table: dim_championship_teams
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: weather_to_sessions
+    left_table: fct_weather
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: race_control_to_sessions
+    left_table: fct_race_control
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: intervals_to_sessions
+    left_table: fct_intervals
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: overtakes_to_sessions
+    left_table: fct_overtakes
+    right_table: dim_sessions
+    relationship_columns:
+      - left_column: SESSION_KEY
+        right_column: SESSION_KEY
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: starting_grid_to_sessions
+    left_table: fct_starting_grid
     right_table: dim_sessions
     relationship_columns:
       - left_column: SESSION_KEY
